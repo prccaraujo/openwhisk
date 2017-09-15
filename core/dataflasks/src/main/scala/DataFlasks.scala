@@ -4,16 +4,11 @@ import java.util.UUID
 import akka.actor._
 import akka.actor.ActorSystem
 import akka.actor.Props
-import com.sun.java.swing.action.ActionManager
 import com.typesafe.config._
-import communication.Messages.ActionManagerStartMessage
-import group.GroupManager
-import main.scala.communication.Messages.{ActionManagerStartMessage, CyclonManagerStartMessage}
+import main.scala.communication.Messages.{CyclonManagerStartMessage}
 import main.scala.group.GroupManager
 import main.scala.peers.{DFPeer, Peer}
 import main.scala.pss.CyclonManager
-import peers.{DFPeer, Peer}
-import pss.CyclonManager
 
 import scala.collection.mutable
 

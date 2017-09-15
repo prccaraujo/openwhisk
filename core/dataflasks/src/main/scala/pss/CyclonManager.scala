@@ -3,6 +3,7 @@ package main.scala.pss
 import java.util.UUID
 
 import akka.actor._
+import main.scala.communication.Messages._
 import main.scala.group.GroupManager
 import main.scala.peers.{DFPeer, Peer}
 
@@ -15,8 +16,8 @@ class CyclonManager(private val _localPeer: Peer,
                     val initialView: mutable.HashMap[UUID, Peer],
                     val groupManager: GroupManager = null) extends Actor {
 
-  import config.Configs.CyclonManagerConfig._
-  import config.Configs.SystemConfig._
+  import main.scala.config.Configs.CyclonManagerConfig._
+  import main.scala.config.Configs.SystemConfig._
   import system.dispatcher
 
   var localView: mutable.HashMap[UUID, Peer] = initialView
@@ -130,7 +131,7 @@ class CyclonManager(private val _localPeer: Peer,
 
   // Peer sends a message to himself every gossipInterval, and disseminates view info upon receival
   def scheduleMessageDissemination(localActor: ActorRef) = {
-    system.scheduler.schedule(3000 milliseconds, gossipInterval, localActor, CyclonDisseminateMessage)
+    system.scheduler.schedule(3000.milliseconds, gossipInterval, localActor, CyclonDisseminateMessage)
   }
 
   def processRequestMessage(message: CyclonRequestMessage): Unit = {

@@ -14,7 +14,7 @@ object Configs {
   }
 
   object ActionManagerConfig {
-    val relieverInterval = 1 second
+    val relieverInterval = 1.second
     val initialDissemination = 3
   }
 
@@ -23,7 +23,7 @@ object Configs {
   }
 
   object CyclonManagerConfig {
-    val gossipInterval = 2 seconds
+    val gossipInterval = 2.seconds
     val gossipSize = 5
     val localViewSize = 8
   }
@@ -31,7 +31,7 @@ object Configs {
   object SystemConfig {
     val system = akka.actor.ActorSystem("ActorFlasks")
     val baseSystemAddress = "akka.tcp://ActorFlasks"
-    val peerFindingTimeLimit = 5 seconds
+    val peerFindingTimeLimit = 5.seconds
 
     def getPeerActorRef(peer: Peer, actorName: String, context: ActorContext): Future[ActorRef] = {
       val path = s"$baseSystemAddress@" +
