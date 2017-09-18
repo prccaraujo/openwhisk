@@ -14,17 +14,15 @@ ENV DEBIAN_FRONTEND noninteractive
 # RUN pip install -r requirements.txt
 # RUN apt-get install screen
 
-# Make port 80 available
-EXPOSE 80
-
 # Make port 50000 available
-EXPOSE 50000
-# EXPOSE 50001
-# EXPOSE 50002
+EXPOSE 50000-59999
 
 # Define environment variable
 # ENV NAME World
 
 # Copy app jars
 COPY build/distributions/dataflasks.tar ./
+COPY src/resources/local_config.txt ./
+COPY src/resources/appdata1.conf ./
+
 RUN tar xf dataflasks.tar

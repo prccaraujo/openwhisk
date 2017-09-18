@@ -6,6 +6,7 @@ import akka.actor._
 import main.scala.communication.Messages._
 import main.scala.group.GroupManager
 import main.scala.peers.{DFPeer, Peer}
+import whisk.common.Logging
 
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
@@ -14,7 +15,8 @@ import scala.util.{Failure, Random, Success}
 
 class CyclonManager(private val _localPeer: Peer,
                     val initialView: mutable.HashMap[UUID, Peer],
-                    val groupManager: GroupManager = null) extends Actor {
+                    val groupManager: GroupManager = null,
+                    implicit val logging: Logging) extends Actor {
 
   import main.scala.config.Configs.CyclonManagerConfig._
   import main.scala.config.Configs.SystemConfig._
@@ -188,6 +190,8 @@ class CyclonManager(private val _localPeer: Peer,
       processResponseMessage(msg)
     case msg: PeerInfoRequest =>
       retrievePeerInfo(sender, msg.infoSize)
+    case msg: ControllerTestRequest =>
+      logging.info(this, s"Received message from controller ${sender().path.toString}")
     case _ =>
       println("Unrecognized message")
   }

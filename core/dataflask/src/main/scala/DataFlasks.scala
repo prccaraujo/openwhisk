@@ -5,10 +5,11 @@ import akka.actor._
 import akka.actor.ActorSystem
 import akka.actor.Props
 import com.typesafe.config._
-import main.scala.communication.Messages.{CyclonManagerStartMessage}
+import main.scala.communication.Messages.CyclonManagerStartMessage
 import main.scala.group.GroupManager
 import main.scala.peers.{DFPeer, Peer}
 import main.scala.pss.CyclonManager
+import whisk.common.{AkkaLogging, Logging}
 
 import scala.collection.mutable
 
@@ -30,9 +31,10 @@ class DataFlasks {
                                 localPeer: Peer,
                                 initialView: mutable.HashMap[UUID, Peer],
                                 system: ActorSystem,
-                                cyclonManagerPathPrefix: String): ActorRef = {
+                                cyclonManagerPathPrefix: String,
+                                logging: Logging): ActorRef = {
         val groupManager = new GroupManager(localPeer)
-        val remote: ActorRef = system.actorOf(Props(new CyclonManager(localPeer, initialView, groupManager)), name=s"${cyclonManagerPathPrefix}${localId}")
+        val remote: ActorRef = system.actorOf(Props(new CyclonManager(localPeer, initialView, groupManager, logging)), name=s"${cyclonManagerPathPrefix}${localId}")
 
         remote ! CyclonManagerStartMessage(remote)
 
@@ -61,8 +63,8 @@ object DataFlasks {
     val actorSystemName = "ActorFlasks"
 
     def main(args: Array[String]): Unit = {
+
         //Parse local peer arguments
-        //TODO: Mandar para log o print
         if(args.length < 4) {
             print("Insufficient number of arguments")
             System.exit(1)
@@ -72,28 +74,28 @@ object DataFlasks {
         val localIP = args(1)
         val localPort = args(2)
         val localCapacity = args(3)
-        val confFolderPath = args(4) //TODO: Isto deixará de ser válido
+        val confFolderPath = args(4)
 
         val flasks = new DataFlasks()
         val localPeer = new DFPeer(localId, localIP, localPort.toInt, localCapacity.toInt)
         val system = flasks.initializeActorSystem(confFolderPath, systemPathPrefix, localId, actorSystemName)
 
-        //Parse known nodes to initial view
-        //TODO: Remove this and parse only the infomation about the load balancer
-        val numberOfArgumentsPerNode = 4
-        val numberOfArgumentsForLocalNode = 5
+        implicit val logger = new AkkaLogging(akka.event.Logging.getLogger(system, this))
 
         var initialView: mutable.HashMap[UUID, Peer] = mutable.HashMap()
 
-        for (i <- numberOfArgumentsForLocalNode to args.length - 1) {
-            if ((i == numberOfArgumentsForLocalNode + numberOfArgumentsPerNode * initialView.size) && args(i) != null && !args(i).isEmpty) {
-                val newPeer = new DFPeer(args(i), args(i+1), args(i+2).toInt, args(i+3).toInt, _age = 0, _position = numberOfArgumentsPerNode/(args.length-1))
-                if(!newPeer.uuid.equals(localPeer.uuid))
-                    initialView += (newPeer.uuid -> newPeer)
-            }
-        }
+        val balancerId = args(5)
+        val balancerIP = args(6)
+        val balancerPort = args(7)
+        val balancerCapacity = 0
 
-        val cyclonManagerActorRef = flasks.startLocalCyclonManager(localId, localPeer, initialView, system, cyclonManagerPathPrefix)
+        //TODO: FIX POSITION
+        val balancerPeer = new DFPeer(balancerId, balancerIP, balancerPort.toInt, balancerCapacity, _age = 0)
+
+        if(!localPeer.uuid.equals(balancerPeer.uuid))
+            initialView += (balancerPeer.uuid -> balancerPeer)
+
+        val cyclonManagerActorRef = flasks.startLocalCyclonManager(localId, localPeer, initialView, system, cyclonManagerPathPrefix, logger)
     }
 }
 

@@ -1,7 +1,7 @@
-package main.scala.communication
+package whisk.core.loadBalancer.communication
 
 import akka.actor.ActorRef
-import main.scala.peers.Peer
+import whisk.core.loadBalancer.peers.Peer
 
 import scala.collection.mutable.ListBuffer
 
@@ -35,4 +35,8 @@ object Messages {
 
   /*Fake reliever messages*/
   case class RelieveLoadMessage() extends Serializable
+
+  //TODO: Delete this
+  case class ControllerTestRequest() extends Serializable
+  case class ControllerTestResponse() extends Serializable
 }
