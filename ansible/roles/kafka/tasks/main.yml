@@ -1,5 +1,5 @@
 ---
-# This role will install kafka in group 'kafka' in the environment inventory
+# This role will install kafka in whisk.core.group 'kafka' in the environment inventory
 # In deploy mode it will deploy kafka including zookeeper.
 # In clean mode it will remove kafka and zookeeper containers.
 

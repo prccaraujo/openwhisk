@@ -1,0 +1,13 @@
+---
+# This role will install a dataflasks instance in whisk.core.group 'dataflasks' in the environment inventory
+# In deploy mode it will deploy dataflasks.
+# In clean mode it will remove the dataflasks containers.
+
+- include: deploy.yml
+  when: mode == "deploy"
+
+- include: clean.yml
+  when: mode == "clean"
+
+- include: nuke.yml
+  when: mode == "nuke"

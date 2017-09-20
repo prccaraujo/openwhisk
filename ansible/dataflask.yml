@@ -1,0 +1,6 @@
+---
+# This playbook deploys DataFlasks  
+
+- hosts: dataflasks
+  roles:
+  - dataflask

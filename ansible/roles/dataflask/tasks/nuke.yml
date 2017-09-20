@@ -1,0 +1,10 @@
+---
+
+- include: clean.yml
+
+- name: remove dataflask images
+  docker_image:
+     state: absent
+     name: prccaraujo/dataflask
+     tag: latest
+     force: yes

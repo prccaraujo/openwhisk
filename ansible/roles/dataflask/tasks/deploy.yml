@@ -1,0 +1,93 @@
+---
+# This role installs dataflasks.
+
+- include: docker_login.yml
+
+- name: "pull dataflask image with tag {{docker.image.tag}}"
+  shell: "docker pull prccaraujo/dataflask:{{docker.image.tag}}"
+  with_items:
+    - 'prccaraujo/dataflask'
+  when: docker_registry != ""
+  retries: "{{ docker.pull.retries }}"
+  delay: "{{ docker.pull.delay }}"
+
+- name: determine docker root dir
+  uri:  url="http://{{ inventory_hostname }}:{{ docker.port }}/info" return_content=yes
+  register: dockerInfo
+
+- name: ensure dataflask log directory is created with permissions
+  file:
+    path: "{{ whisk_logs_dir }}/dataflask{{ groups['dataflasks'].index(inventory_hostname) }}"
+    state: directory
+    mode: 0777
+  become: true
+
+- name: define options when deploying dataflask on Ubuntu
+  set_fact:
+    linuxOptions: "-v /usr/lib/x86_64-linux-gnu/libapparmor.so.1:/usr/lib/x86_64-linux-gnu/libapparmor.so.1"
+  when: whisk_version_name != "mac"
+
+- name: get running dataflask information
+  uri: url="http://{{ inventory_hostname }}:{{ docker.port }}/containers/json?filters={{ '{"name":[ "dataflask" ]}' | urlencode }}" return_content=yes
+  register: dataflaskInfo
+
+- name: determine if more than one dataflask is running
+  fail: msg="more than one dataflask is running"
+  when: dataflaskInfo.json|length > 1
+
+- name: determine if index of dataflask is same with index of inventory host
+  fail:
+    msg: "dataflask index is invalid. expected: /dataflask{{ groups['dataflasks'].index(inventory_hostname) }} found: {{ item.Names[0] }}"
+  with_items: "{{ dataflaskInfo.json }}"
+  when: item.Names[0] != "/dataflask{{ groups['dataflasks'].index(inventory_hostname) }}"
+
+- name: start dataflask using docker cli
+  shell: >
+        docker run -d
+        --userns=host
+        --pid=host
+        --privileged
+        {{ linuxOptions | default('') }}
+        --name dataflask{{ groups['dataflasks'].index(inventory_hostname) }}
+        --hostname dataflask{{ groups['dataflasks'].index(inventory_hostname) }}
+        --restart {{ docker.restart.policy }}
+        -e JAVA_OPTS='-Xmx{{ dataflask.heap }}'
+        -e DATAFLASK_OPTS='{{ dataflask.arguments }}'
+        -e LOCAL_ID='{{ groups['dataflasks'].index(inventory_hostname) }}'
+        -e LOCAL_IP='{{ inventory_hostname }}'
+        -e FLASKS_PORT='{{ dataflask.port }}'
+        -e CONFIG_PATH='/'
+        -e ALL_NODES='{{ groups['dataflasks']|join(" ") }}'
+        -e LOCAL_CAPACITY='10'
+        -e COMPONENT_NAME='dataflask{{ groups['dataflasks'].index(inventory_hostname) }}'
+        -e RUNTIMES_MANIFEST='{{ runtimesManifest | to_json }}'
+        -e SELF_DOCKER_ENDPOINT='localhost'
+        -e DOCKER_REGISTRY='{{ docker_registry }}'
+        -e DOCKER_IMAGE_PREFIX='{{ docker.image.prefix }}'
+        -e DOCKER_IMAGE_TAG='{{ docker.image.tag }}'
+        -e WHISK_LOGS_DIR='{{ whisk_logs_dir }}'
+        -v /sys/fs/cgroup:/sys/fs/cgroup
+        -v /run/runc:/run/runc
+        -v {{ whisk_logs_dir }}/dataflask{{ groups['dataflasks'].index(inventory_hostname) }}:/logs
+        -v {{ dockerInfo["json"]["DockerRootDir"] }}/containers/:/containers
+        -v {{ docker_sock | default('/var/run/docker.sock') }}:/var/run/docker.sock
+        -p {{ dataflask.port }}:{{ dataflask.port }}
+        prccaraujo/dataflask:{{ docker.image.tag }}
+        /bin/sh -c "./createConf.sh; ./dataflask/bin/dataflask" >> {{ whisk_logs_dir }}/dataflask{{ groups['dataflasks'].index(inventory_hostname) }}/dataflask_logs.log 2>&1
+  when: dataflaskInfo.json|length == 0
+
+# /bin/sh -c "exec /dataflask/bin/dataflask {{ groups['dataflasks'].index(inventory_hostname) }} >> /logs/dataflask{{ groups['dataflasks'].index(inventory_hostname) }}_logs.log 2>&1"
+
+- debug:
+    msg: "LOCAL_ID - {{ groups['dataflasks'].index(inventory_hostname) }}
+      LOCAL_IP - {{ inventory_hostname }}
+      FLASKS_PORT - {{ dataflask.port }}
+      ALL_NODES - {{ groups['dataflasks']|join(\" \") }}"
+
+- name: wait until Dataflask is up and running
+  wait_for:
+    host: "{{ inventory_hostname }}"
+    port: "{{ dataflask.port }}"
+    state: started
+    delay: 5
+    timeout: 10

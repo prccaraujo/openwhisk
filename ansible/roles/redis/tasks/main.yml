@@ -1,5 +1,5 @@
 ---
-# This role will install redis in group 'redis' in the environment inventory
+# This role will install redis in whisk.core.group 'redis' in the environment inventory
 # In deploy mode it will deploy redis.
 # In clean mode it will remove the redis containers.
 

@@ -8,7 +8,7 @@
     state: absent
   ignore_errors: True
 
-- name: remove nginx config directory
+- name: remove nginx whisk.core.config directory
   file:
     path: "{{ nginx.confdir }}"
     state: absent

@@ -23,9 +23,9 @@ ansible ansible_connection=local
 192.168.116.142
 
 
-; {% for group in group_names%}
-; [{{group}}]
-; {% for host in groups[group] %}
+; {% for whisk.core.group in group_names%}
+; [{{whisk.core.group}}]
+; {% for host in groups[whisk.core.group] %}
 ; {{ hostvars[host]["ansible_lo"]["ipv4"]["address"] }}
 ; {% endfor %}
 ; {% endfor %}

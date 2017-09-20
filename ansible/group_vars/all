@@ -5,7 +5,7 @@ openwhisk_cli_home: "{{ lookup('env', 'OPENWHISK_CLI') | default(openwhisk_home,
 exclude_logs_from: []
 
 # This whisk_api_localhost_name_default is used to configure nginx to permit vanity URLs for web actions
-# for local deployment. For a public deployment, the specific environment group vars should define
+# for local deployment. For a public deployment, the specific environment whisk.core.group vars should define
 # whisk_api_host_name; this is available to actions and hence must resolve from inside an action container
 # specific to the deployment (i.e., it may be an IP address rather than a hostname in some cases).
 # For a local deployment, use whisk_api_localhost_name. For a deployment which requires
@@ -111,6 +111,12 @@ controller:
   arguments: "{{ controller_arguments | default('') }}"
   blackboxFraction: 0.10
   instances: "{{ groups['controllers'] | length }}"
+
+dataflask:
+  port: 50000
+  heap: "{{ dataflask_heap | default('2g') }}"
+  arguments: "{{ dataflask_arguments | default('') }}"
+  instances: "{{ groups['dataflasks'] | length }}"
 
 registry:
   confdir: "{{ config_root_dir }}/registry"

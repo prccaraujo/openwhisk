@@ -1,5 +1,5 @@
 ---
-# This role will install controller in group 'controllers' in the environment inventory
+# This role will install controller in whisk.core.group 'controllers' in the environment inventory
 # In deploy mode it will deploy controllers.
 # In clean mode it will remove the controller containers.
 

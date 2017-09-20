@@ -4,12 +4,12 @@
 # Also you need to have sshpass installed. 
 # (apt-get for ubuntu, for mac: brew install https://raw.githubusercontent.com/kadwanev/bigboybrew/master/Library/Formula/sshpass.rb)
 
-- name: add {{docker.user}} group
-  group: name={{docker.user}}
+- name: add {{docker.user}} whisk.core.group
+  whisk.core.group: name={{docker.user}}
   become: true
 
 - name: add {{docker.user}} user
-  user: name={{docker.user}} shell=/bin/bash generate_ssh_key=yes group={{docker.user}} groups=sudo append=yes
+  user: name={{docker.user}} shell=/bin/bash generate_ssh_key=yes whisk.core.group={{docker.user}} groups=sudo append=yes
   become: true
 
 - name: remove user passwd

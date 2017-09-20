@@ -5,7 +5,7 @@ To communicate with the Openstack APIs, the bootstapper will need a few addition
 Install prerequisites
 ```
 sudo apt-get -y install python-setuptools python-dev libssl-dev build-essential libssl-dev libffi-dev python-dev python-novaclient
-sudo pip install shade pytz positional appdirs monotonic rfc3986 pyparsing stevedore debtcollector netaddr oslo.config futures warlock six
+sudo pip install shade pytz positional appdirs monotonic rfc3986 pyparsing stevedore debtcollector netaddr oslo.whisk.core.config futures warlock six
 ```
 
 Populate the [OpenStack .env file](openstack.env) with valid credentials/endpoint. Please note that OS_WSK_DB_VOLUME is optional. If not specified, local disk will be used instead of persistent disk for CouchDB.

@@ -1,5 +1,5 @@
 ---
-# This role will install apigateway in the group 'apigateway' in the environment inventory
+# This role will install apigateway in the whisk.core.group 'apigateway' in the environment inventory
 # In deploy mode it will deploy apigateway.
 # In clean mode it will remove the apigateway containers.
 

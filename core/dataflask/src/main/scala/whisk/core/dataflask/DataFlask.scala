@@ -1,9 +1,9 @@
+package dataflask
+
 import java.io.File
 import java.util.UUID
 
-import akka.actor._
-import akka.actor.ActorSystem
-import akka.actor.Props
+import akka.actor.{ActorSystem, Props, _}
 import com.typesafe.config._
 import main.scala.communication.Messages.CyclonManagerStartMessage
 import main.scala.group.GroupManager
@@ -13,7 +13,7 @@ import whisk.common.{AkkaLogging, Logging}
 
 import scala.collection.mutable
 
-class DataFlasks {
+class DataFlask {
 
     //TODO: Mudar porque resource tem de se ir buscar a outro sitio
     def initializeActorSystem(confFolderPath: String,
@@ -56,7 +56,7 @@ class DataFlasks {
     //startLocalActionManager(localCapacity.toInt, localPeer, cyclonManagerActorRef)
 }
 
-object DataFlasks {
+object DataFlask {
     val cyclonManagerPathPrefix = "cyclon"
     val actionManagerPathPrefix = "action"
     val systemPathPrefix = "app"
@@ -65,37 +65,33 @@ object DataFlasks {
     def main(args: Array[String]): Unit = {
 
         //Parse local peer arguments
-        if(args.length < 4) {
-            print("Insufficient number of arguments")
-            System.exit(1)
-        }
+        val localId = sys.env("LOCAL_ID")
+        val localIP = sys.env("LOCAL_IP")
+        val flasksPort = sys.env("FLASKS_PORT")
+        val localCapacity = sys.env("LOCAL_CAPACITY")
+        val confFolderPath = sys.env("CONFIG_PATH")
+        val allNodes = sys.env("ALL_NODES")
 
-        val localId = args(0)
-        val localIP = args(1)
-        val localPort = args(2)
-        val localCapacity = args(3)
-        val confFolderPath = args(4)
-
-        val flasks = new DataFlasks()
-        val localPeer = new DFPeer(localId, localIP, localPort.toInt, localCapacity.toInt)
+        val flasks = new DataFlask()
+        val localPeer = new DFPeer(localId, localIP, flasksPort.toInt, localCapacity.toInt)
         val system = flasks.initializeActorSystem(confFolderPath, systemPathPrefix, localId, actorSystemName)
 
         implicit val logger = new AkkaLogging(akka.event.Logging.getLogger(system, this))
 
+        logger.info(this, s"Local ID $localId")
+        logger.info(this, s"Local IP $localIP")
+        logger.info(this, s"PORT $flasksPort")
+        logger.info(this, s"CONFIG PATH $confFolderPath")
+        logger.info(this, s"ALL NODES - $allNodes")
+
         var initialView: mutable.HashMap[UUID, Peer] = mutable.HashMap()
 
-        val balancerId = args(5)
-        val balancerIP = args(6)
-        val balancerPort = args(7)
-        val balancerCapacity = 0
-
-        //TODO: FIX POSITION
-        val balancerPeer = new DFPeer(balancerId, balancerIP, balancerPort.toInt, balancerCapacity, _age = 0)
-
-        if(!localPeer.uuid.equals(balancerPeer.uuid))
-            initialView += (balancerPeer.uuid -> balancerPeer)
+        for((node, index) <- allNodes.split(" ").zipWithIndex) {
+            val newPeer = new DFPeer(index.toString, node, flasksPort.toInt, 10, _age = 0, _position = (index+1)/allNodes.split(" ").length)
+            if(!newPeer.uuid.equals(localPeer.uuid))
+                initialView += (newPeer.uuid -> newPeer)
+        }
 
         val cyclonManagerActorRef = flasks.startLocalCyclonManager(localId, localPeer, initialView, system, cyclonManagerPathPrefix, logger)
     }
 }
-

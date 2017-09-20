@@ -2,7 +2,8 @@ apply plugin: 'scala'
 apply plugin: 'application'
 apply plugin: 'eclipse'
 
-ext.dockerImageName = 'dataflasks'
+ext.dockerImagePrefix = 'prccaraujo'
+ext.dockerImageName = 'dataflask'
 apply from: '../../gradle/docker.gradle'
 distDocker.dependsOn ':common:scala:distDocker', 'distTar'
 
@@ -11,6 +12,11 @@ repositories {
 }
 
 dependencies {
+    compile group: 'com.typesafe.akka', name: 'akka-actor_2.11', version: '2.5.0'
+    compile group: 'com.typesafe.akka', name: 'akka-remote_2.11', version: '2.5.0'
+    compile group: 'com.typesafe.akka', name: 'akka-testkit_2.11', version: '2.5.0'
+    compile group: 'org.scalatest', name: 'scalatest_2.11', version: '3.0.0'
+    compile group: 'com.typesafe', name: 'config', version: '1.2.1'
     compile "org.scala-lang:scala-library:${gradle.scala.version}"
     compile project(':common:scala')
 }
@@ -19,5 +25,5 @@ tasks.withType(ScalaCompile) {
     scalaCompileOptions.additionalParameters = gradle.scala.compileFlags
 }
 
-mainClassName = "whisk.core.dataflasks.DataFlasks"
+mainClassName = "whisk.core.dataflask.DataFlask"
 applicationDefaultJvmArgs = ["-XX:+CrashOnOutOfMemoryError"]

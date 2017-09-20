@@ -1,28 +1,24 @@
 # Use an official scala runtime as a parent image
-# FROM n0ts/ubuntu-scala
 FROM scala
 
 ENV DEBIAN_FRONTEND noninteractive
 
-# Set the working directory to /app
-# WORKDIR /flasks
+ENV DOCKER_VERSION 1.12.0
 
-# Copy the current directory contents into the container at /app
-# ADD . /flasks
-
-# Install any needed packages specified in requirements.txt
-# RUN pip install -r requirements.txt
-# RUN apt-get install screen
+# Uncomment to fetch latest version of docker instead: RUN wget -qO- https://get.docker.com | sh
+# Install docker client
+RUN wget --no-verbose https://get.docker.com/builds/Linux/x86_64/docker-${DOCKER_VERSION}.tgz && \
+tar --strip-components 1 -xvzf docker-${DOCKER_VERSION}.tgz -C /usr/bin docker/docker && \
+tar --strip-components 1 -xvzf docker-${DOCKER_VERSION}.tgz -C /usr/bin docker/docker-runc && \
+rm -f docker-${DOCKER_VERSION}.tgz && \
+chmod +x /usr/bin/docker && \
+chmod +x /usr/bin/docker-runc
 
 # Make port 50000 available
 EXPOSE 50000-59999
 
-# Define environment variable
-# ENV NAME World
-
 # Copy app jars
-COPY build/distributions/dataflasks.tar ./
-COPY src/resources/local_config.txt ./
-COPY src/resources/appdata1.conf ./
+COPY src/main/resources/createConf.sh ./
+COPY build/distributions/dataflask.tar ./
 
-RUN tar xf dataflasks.tar
+RUN tar xf dataflask.tar && rm -f dataflask.tar

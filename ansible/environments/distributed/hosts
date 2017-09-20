@@ -5,22 +5,26 @@
 ; used for local actions only
 ansible ansible_connection=local
 [registry]
-192.168.116.101
+127.0.0.1
 [edge]
-10.3.2.154
+127.0.0.1
 [apigateway:children]
 edge
 [redis:children]
 edge
 [controllers]
-192.168.116.101
+127.0.0.1
 [kafka]
-10.3.2.156
+127.0.0.1
 [consul_servers]
-192.168.116.101
+127.0.0.1
 [invokers]
-192.168.116.142
-192.168.116.139
-192.168.116.147
+192.168.116.176
+192.168.116.162
+192.168.116.161
+[dataflasks]
+192.168.116.176
+192.168.116.162
+192.168.116.161
 [db]
-192.168.116.101
+127.0.0.1

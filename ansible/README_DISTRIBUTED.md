@@ -30,7 +30,7 @@ Ensure that the Ansible VM can authenticate to the OpenWhisk VMs via SSH using t
 ansible all -i environments/distributed -m ping
 ```
 
-Generate config files
+Generate whisk.core.config files
 
 ```
 ansible-playbook -i environments/distributed setup.yml
