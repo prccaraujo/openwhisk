@@ -99,9 +99,9 @@ class CyclonManager(private val _localPeer: Peer,
   }
 
   def sendMessageToPeer(peer: Peer, message: CyclonMessage): Unit = {
-    getPeerActorRef(peer, "cyclon", context).onComplete{
+    getPeerActorRef(peer, cyclonManagerPathPrefix, context).onComplete{
        case Success(peerRef) =>
-         //println(s"Success at finding peer ${peer.name}")
+         println(s"Success at finding peer ${peer.name}")
          peerRef ! message
        case Failure(f) =>
          logging.error(this, s"Failure trying to find peer ${peer.name}")

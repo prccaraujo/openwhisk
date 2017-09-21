@@ -41,7 +41,11 @@ class DataFlask {
 
 object DataFlask {
 
-    import main.scala.config.Configs.SystemConfig
+    //TODO: Refactor to config file
+    val cyclonManagerPathPrefix = "cyclon"
+    val actionManagerPathPrefix = "action"
+    val systemPathPrefix = "app"
+    val actorSystemName = "ActorFlasks"
 
     def main(args: Array[String]): Unit = {
 
@@ -55,7 +59,7 @@ object DataFlask {
 
         val flasks = new DataFlask()
         val localPeer = new DFPeer(localId, localIP, flasksPort.toInt, localCapacity.toInt)
-        val system = flasks.initializeActorSystem(confFolderPath, SystemConfig.systemPathPrefix, localId, SystemConfig.actorSystemName)
+        val system = flasks.initializeActorSystem(confFolderPath, systemPathPrefix, localId, actorSystemName)
 
         implicit val logging = new AkkaLogging(akka.event.Logging.getLogger(system, this))
 
@@ -74,6 +78,6 @@ object DataFlask {
         }
 
         //Initiate Cyclon
-        flasks.startLocalCyclonManager(localId, localPeer, initialView, system, SystemConfig.cyclonManagerPathPrefix)
+        flasks.startLocalCyclonManager(localId, localPeer, initialView, system, cyclonManagerPathPrefix)
     }
 }

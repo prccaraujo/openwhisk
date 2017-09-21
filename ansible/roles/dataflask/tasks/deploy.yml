@@ -73,7 +73,7 @@
         -v {{ docker_sock | default('/var/run/docker.sock') }}:/var/run/docker.sock
         -p {{ dataflask.port }}:{{ dataflask.port }}
         prccaraujo/dataflask:{{ docker.image.tag }}
-        /bin/sh -c "./createConf.sh; ./dataflask/bin/dataflask" >> {{ whisk_logs_dir }}/dataflask{{ groups['dataflasks'].index(inventory_hostname) }}/dataflask_logs.log 2>&1
+        /bin/sh -c "./createConf.sh; ./dataflask/bin/dataflask"
   when: dataflaskInfo.json|length == 0
 
 # /bin/sh -c "exec /dataflask/bin/dataflask {{ groups['dataflasks'].index(inventory_hostname) }} >> /logs/dataflask{{ groups['dataflasks'].index(inventory_hostname) }}_logs.log 2>&1"
