@@ -1,7 +1,7 @@
 ---
 # Tasks for handling SDK generation and publishing
 
-- name: ensure nginx whisk.core.config directory exists
+- name: ensure nginx config directory exists
   file:
     path: "{{ nginx.confdir }}"
     state: directory

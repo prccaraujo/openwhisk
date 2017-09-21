@@ -25,7 +25,7 @@ def getDiskUsage(dir):
     cmd=['df', '--output=pcent', dir]
     output = subprocess.check_output(cmd)
     pattern = "[0-9]+"
-    result = re.search(pattern, output).whisk.core.group()
+    result = re.search(pattern, output).group()
     return result
 
 def getImageRepos():

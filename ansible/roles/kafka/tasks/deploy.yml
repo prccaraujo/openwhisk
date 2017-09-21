@@ -1,5 +1,5 @@
 ---
-# This role will install Kafka with Zookeeper in whisk.core.group 'kafka' in the environment inventory
+# This role will install Kafka with Zookeeper in group 'kafka' in the environment inventory
 
 - name: "pull the zookeeper:{{ zookeeper.version }} image"
   shell: "docker pull zookeeper:{{ zookeeper.version }}"
@@ -51,20 +51,20 @@
   delay: 5
 
 - name: create the health topic
-  shell: "docker exec kafka bash -c 'unset JMX_PORT; kafka-topics.sh --create --topic health --replication-factor 1 --partitions 1 --zookeeper {{ inventory_hostname }}:{{ zookeeper.port }} --whisk.core.config retention.bytes={{ kafka.topics.health.retentionBytes }} --whisk.core.config retention.ms={{ kafka.topics.health.retentionMS }} --whisk.core.config segment.bytes={{ kafka.topics.health.segmentBytes }}'"
+  shell: "docker exec kafka bash -c 'unset JMX_PORT; kafka-topics.sh --create --topic health --replication-factor 1 --partitions 1 --zookeeper {{ inventory_hostname }}:{{ zookeeper.port }} --config retention.bytes={{ kafka.topics.health.retentionBytes }} --config retention.ms={{ kafka.topics.health.retentionMS }} --config segment.bytes={{ kafka.topics.health.segmentBytes }}'"
   register: command_result
   failed_when: "not ('Created topic' in command_result.stdout or 'already exists' in command_result.stdout)"
   changed_when: "'Created topic' in command_result.stdout"
 
 - name: create the active-ack topics
-  shell: "docker exec kafka bash -c 'unset JMX_PORT; kafka-topics.sh --create --topic completed{{ item.0 }} --replication-factor 1 --partitions 1 --zookeeper {{ inventory_hostname }}:{{ zookeeper.port }} --whisk.core.config retention.bytes={{ kafka.topics.completed.retentionBytes }} --whisk.core.config retention.ms={{ kafka.topics.completed.retentionMS }} --whisk.core.config segment.bytes={{ kafka.topics.completed.segmentBytes }}'"
+  shell: "docker exec kafka bash -c 'unset JMX_PORT; kafka-topics.sh --create --topic completed{{ item.0 }} --replication-factor 1 --partitions 1 --zookeeper {{ inventory_hostname }}:{{ zookeeper.port }} --config retention.bytes={{ kafka.topics.completed.retentionBytes }} --config retention.ms={{ kafka.topics.completed.retentionMS }} --config segment.bytes={{ kafka.topics.completed.segmentBytes }}'"
   with_indexed_items: "{{ groups['controllers'] }}"
   register: command_result
   failed_when: "not ('Created topic' in command_result.stdout or 'already exists' in command_result.stdout)"
   changed_when: "'Created topic' in command_result.stdout"
 
 - name: create the invoker topics
-  shell: "docker exec kafka bash -c 'unset JMX_PORT; kafka-topics.sh --create --topic invoker{{ item.0 }} --replication-factor 1 --partitions 1 --zookeeper {{ inventory_hostname }}:{{ zookeeper.port }} --whisk.core.config retention.bytes={{ kafka.topics.invoker.retentionBytes }} --whisk.core.config retention.ms={{ kafka.topics.invoker.retentionMS }} --whisk.core.config segment.bytes={{ kafka.topics.invoker.segmentBytes }}'"
+  shell: "docker exec kafka bash -c 'unset JMX_PORT; kafka-topics.sh --create --topic invoker{{ item.0 }} --replication-factor 1 --partitions 1 --zookeeper {{ inventory_hostname }}:{{ zookeeper.port }} --config retention.bytes={{ kafka.topics.invoker.retentionBytes }} --config retention.ms={{ kafka.topics.invoker.retentionMS }} --config segment.bytes={{ kafka.topics.invoker.segmentBytes }}'"
   with_indexed_items: "{{ groups['invokers'] }}"
   register: command_result
   failed_when: "not ('Created topic' in command_result.stdout or 'already exists' in command_result.stdout)"

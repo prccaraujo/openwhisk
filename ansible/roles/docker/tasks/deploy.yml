@@ -21,7 +21,7 @@
     dest: "/etc/default/docker"
   become: true
 
-- name: add user to docker whisk.core.group
+- name: add user to docker group
   user:
     name: "{{docker.user|default(ansible_user_id)}}"
     groups: docker

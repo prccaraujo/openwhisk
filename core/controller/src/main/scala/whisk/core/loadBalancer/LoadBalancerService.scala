@@ -27,7 +27,7 @@ import scala.concurrent.duration.DurationInt
 import scala.util.Failure
 import scala.util.Success
 import org.apache.kafka.clients.producer.RecordMetadata
-import akka.actor.{ActorContext, ActorRef, ActorRefFactory, ActorSystem, Props}
+import akka.actor.{ActorContext, ActorRefFactory, ActorSystem, Props}
 import akka.pattern.ask
 import akka.util.Timeout
 import whisk.common.Logging
@@ -50,8 +50,6 @@ import whisk.core.entity.types.EntityStore
 import scala.annotation.tailrec
 import whisk.core.entity.EntityName
 import whisk.core.entity.Identity
-import whisk.core.loadBalancer.communication.Messages.ControllerTestRequest
-import whisk.core.loadBalancer.peers.{DFPeer, Peer}
 import whisk.spi.SpiLoader
 
 trait LoadBalancer {

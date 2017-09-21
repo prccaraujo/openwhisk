@@ -128,7 +128,6 @@ class CyclonManager(private val _localPeer: Peer,
     } else {
       logging.error(this, "View doesn't have any more peers right now.")
     }
-
   }
 
   // Peer sends a message to himself every gossipInterval, and disseminates view info upon receival

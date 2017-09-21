@@ -23,3 +23,9 @@ RUN curl --silent --location --retry 3 --cacert /etc/ssl/certs/GeoTrust_Global_C
   mkdir -p /usr/lib/jvm && mv /tmp/jdk1.${VERSION}.0_${UPDATE} "${JAVA_HOME}" && \
   apt-get autoclean && apt-get --purge -y autoremove && \
   rm -rf /tmp/* /var/tmp/*
+
+# RUN update-alternatives --install "/usr/bin/java" "java" "${JRE_HOME}/bin/java" 1 && \
+#   update-alternatives --install "/usr/bin/javac" "javac" "${JAVA_HOME}/bin/javac" 1 && \
+#   update-alternatives --set java "${JRE_HOME}/bin/java" && \
+#   update-alternatives --set javac "${JAVA_HOME}/bin/javac" && \
+#   mkdir /logs
