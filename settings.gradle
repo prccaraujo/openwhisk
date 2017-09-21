@@ -11,6 +11,7 @@ include 'core:swift3Action'
 include 'core:swift3.1.1Action'
 include 'core:javaAction'
 include 'core:php7.1Action'
+include 'core:dataflask'
 
 include 'tools:cli'
 
