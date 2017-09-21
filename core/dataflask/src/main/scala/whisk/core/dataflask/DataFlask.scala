@@ -1,4 +1,4 @@
-package dataflask
+package whisk.core.dataflask
 
 import java.io.File
 import java.util.UUID
@@ -15,14 +15,12 @@ import scala.collection.mutable
 
 class DataFlask {
 
-    //TODO: Mudar porque resource tem de se ir buscar a outro sitio
     def initializeActorSystem(confFolderPath: String,
                               systemPathPrefix: String,
                               localId: String,
                               actorSystemName: String) : ActorSystem = {
-        val configPath = s"$confFolderPath/${systemPathPrefix}$localId.conf"
+        val configPath = s"$confFolderPath/${systemPathPrefix}${localId}.conf"
         val config = ConfigFactory.parseFile(new File(configPath))
-        //println(System.getProperty("user.dir"))
 
         return ActorSystem(actorSystemName , config)
     }
@@ -31,36 +29,19 @@ class DataFlask {
                                 localPeer: Peer,
                                 initialView: mutable.HashMap[UUID, Peer],
                                 system: ActorSystem,
-                                cyclonManagerPathPrefix: String,
-                                logging: Logging): ActorRef = {
+                                cyclonManagerPathPrefix: String)(implicit logging: Logging): ActorRef = {
         val groupManager = new GroupManager(localPeer)
-        val remote: ActorRef = system.actorOf(Props(new CyclonManager(localPeer, initialView, groupManager, logging)), name=s"${cyclonManagerPathPrefix}${localId}")
+        val remote: ActorRef = system.actorOf(Props(new CyclonManager(localPeer, initialView, groupManager)), name=s"${cyclonManagerPathPrefix}${localId}")
 
         remote ! CyclonManagerStartMessage(remote)
 
         return remote
     }
-/*
-    def startLocalActionManager(localId: String,
-                                localCapacity: Int,
-                                localPeer: Peer,
-                                cyclonManagerActorRef: ActorRef,
-                                system: ActorSystem,
-                                actionManagerPathPrefix: String): Unit = {
-        val remote: ActorRef = system.actorOf(Props(new ActionManager(localCapacity, localPeer, cyclonManagerActorRef)), name=s"${actionManagerPathPrefix}${localId}")
-
-        remote ! ActionManagerStartMessage(remote)
-    }
-*/
-    // This test version doesn't support action dissemination yet
-    //startLocalActionManager(localCapacity.toInt, localPeer, cyclonManagerActorRef)
 }
 
 object DataFlask {
-    val cyclonManagerPathPrefix = "cyclon"
-    val actionManagerPathPrefix = "action"
-    val systemPathPrefix = "app"
-    val actorSystemName = "ActorFlasks"
+
+    import main.scala.config.Configs.SystemConfig
 
     def main(args: Array[String]): Unit = {
 
@@ -74,15 +55,15 @@ object DataFlask {
 
         val flasks = new DataFlask()
         val localPeer = new DFPeer(localId, localIP, flasksPort.toInt, localCapacity.toInt)
-        val system = flasks.initializeActorSystem(confFolderPath, systemPathPrefix, localId, actorSystemName)
+        val system = flasks.initializeActorSystem(confFolderPath, SystemConfig.systemPathPrefix, localId, SystemConfig.actorSystemName)
 
-        implicit val logger = new AkkaLogging(akka.event.Logging.getLogger(system, this))
+        implicit val logging = new AkkaLogging(akka.event.Logging.getLogger(system, this))
 
-        logger.info(this, s"Local ID $localId")
-        logger.info(this, s"Local IP $localIP")
-        logger.info(this, s"PORT $flasksPort")
-        logger.info(this, s"CONFIG PATH $confFolderPath")
-        logger.info(this, s"ALL NODES - $allNodes")
+        logging.info(this, s"Local ID $localId\n" +
+          s"Local IP $localIP\n" +
+          s"PORT $flasksPort" +
+          s"\nCONFIG PATH $confFolderPath" +
+          s"\nALL NODES - $allNodes")
 
         var initialView: mutable.HashMap[UUID, Peer] = mutable.HashMap()
 
@@ -92,6 +73,7 @@ object DataFlask {
                 initialView += (newPeer.uuid -> newPeer)
         }
 
-        val cyclonManagerActorRef = flasks.startLocalCyclonManager(localId, localPeer, initialView, system, cyclonManagerPathPrefix, logger)
+        //Initiate Cyclon
+        flasks.startLocalCyclonManager(localId, localPeer, initialView, system, SystemConfig.cyclonManagerPathPrefix)
     }
 }

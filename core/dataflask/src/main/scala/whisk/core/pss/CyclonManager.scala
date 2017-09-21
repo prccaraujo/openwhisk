@@ -15,8 +15,7 @@ import scala.util.{Failure, Random, Success}
 
 class CyclonManager(private val _localPeer: Peer,
                     val initialView: mutable.HashMap[UUID, Peer],
-                    val groupManager: GroupManager = null,
-                    implicit val logging: Logging) extends Actor {
+                    val groupManager: GroupManager = null)(implicit logging: Logging) extends Actor {
 
   import main.scala.config.Configs.CyclonManagerConfig._
   import main.scala.config.Configs.SystemConfig._
@@ -63,7 +62,6 @@ class CyclonManager(private val _localPeer: Peer,
     return oldestPeer
   }
 
-  //TODO: Ensure the node isn't returning itself
   def getRandomGlobal(numberOfPeers: Int): ListBuffer[Peer] = {
     val globalPeersArray = scala.util.Random.shuffle(localView.values)
     var peerList = ListBuffer[Peer]()
@@ -76,7 +74,7 @@ class CyclonManager(private val _localPeer: Peer,
     return peerList
   }
 
-  //Select list of peers in view to send to neighbours
+  //Select list of whisk.core.peers in view to send to neighbours
   def selectPeerInfoToDisseminate(target: Peer): Set[Peer] = {
     val localPeerInfo: Peer = localPeer.asInstanceOf[DFPeer].clone()
     var toDisseminate: ListBuffer[Peer] = ListBuffer[Peer]() //Mutable List
@@ -84,7 +82,7 @@ class CyclonManager(private val _localPeer: Peer,
     //Shuffle to avoid duplicate dissemination cycles and conform to message size
     localView.values.foreach{ peer =>
       if (!peer.equals(target))
-        toDisseminate += peer.asInstanceOf[DFPeer].clone() //TODO: check if works
+        toDisseminate += peer.asInstanceOf[DFPeer].clone() //TODO: Test
     }
 
     toDisseminate = Random.shuffle(toDisseminate)
@@ -103,11 +101,10 @@ class CyclonManager(private val _localPeer: Peer,
   def sendMessageToPeer(peer: Peer, message: CyclonMessage): Unit = {
     getPeerActorRef(peer, "cyclon", context).onComplete{
        case Success(peerRef) =>
-         println(s"Success at finding peer ${peer.name}")
+         //println(s"Success at finding peer ${peer.name}")
          peerRef ! message
        case Failure(f) =>
-        println(s"Failure trying to find peer ${peer.name}")
-        println(f.getMessage)
+         logging.error(this, s"Failure trying to find peer ${peer.name}")
     }
   }
 
@@ -119,16 +116,19 @@ class CyclonManager(private val _localPeer: Peer,
     val target: Peer = getOlderGlobal //Select neighbour Q with the highest age
     if (target != null) {
       localView -= target.uuid //Replace Q's entry with a new entry of age 0 and P's address
+
+      val toDisseminate: Set[Peer] = selectPeerInfoToDisseminate(target)
+
+      sentPeerData = ListBuffer[Peer]()
+      sentPeerData ++= toDisseminate.toList
+      sentPeerData.filter(peer => peer != localPeer)
+
+      val messageToSend = CyclonRequestMessage(localPeer, toDisseminate)
+      sendMessageToPeer(target, messageToSend)
+    } else {
+      logging.error(this, "View doesn't have any more peers right now.")
     }
 
-    val toDisseminate: Set[Peer] = selectPeerInfoToDisseminate(target)
-
-    sentPeerData = ListBuffer[Peer]()
-    sentPeerData ++= toDisseminate.toList
-    sentPeerData.filter(peer => peer != localPeer)
-
-    val messageToSend = CyclonRequestMessage(localPeer, toDisseminate)
-    sendMessageToPeer(target, messageToSend)
   }
 
   // Peer sends a message to himself every gossipInterval, and disseminates view info upon receival
@@ -180,7 +180,7 @@ class CyclonManager(private val _localPeer: Peer,
 
   override def receive: Receive = {
     case msg: CyclonManagerStartMessage =>
-      println("Cyclon Manager Started")
+      logging.info(this, s"Cyclon Manager Started")
       scheduleMessageDissemination(msg.destination)
     case CyclonDisseminateMessage =>
       disseminateCyclonInfo
@@ -193,6 +193,6 @@ class CyclonManager(private val _localPeer: Peer,
     case msg: ControllerTestRequest =>
       logging.info(this, s"Received message from controller ${sender().path.toString}")
     case _ =>
-      println("Unrecognized message")
+      logging.error(this, s"Received unrecognized message")
   }
 }

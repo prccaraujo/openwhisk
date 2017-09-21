@@ -3,10 +3,11 @@ package main.scala.group
 import java.util.UUID
 
 import main.scala.peers.Peer
+import whisk.common.Logging
 
 import scala.collection.mutable
 
-class GroupManager(localPeer: Peer) {
+class GroupManager(localPeer: Peer)(implicit logging: Logging) {
 
   import main.scala.config.Configs.GroupManagerConfig._
 
@@ -22,9 +23,12 @@ class GroupManager(localPeer: Peer) {
 
     cleanLocalView
     tryMergeSplitGroup
-    //println(s"Old group is $currentGroup")
+
+    val oldGroup = currentGroup
     currentGroup = calculateGroupNumber(localPeer.position)
-    println(s"New group is $currentGroup")
+
+    if(oldGroup != currentGroup)
+      logging.info(this, s"Changed from group $oldGroup to $currentGroup")
   }
 
   def cleanLocalView: Unit = {
