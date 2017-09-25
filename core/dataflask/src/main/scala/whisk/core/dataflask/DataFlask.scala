@@ -22,7 +22,7 @@ class DataFlask {
         val configPath = s"$confFolderPath/${systemPathPrefix}${localId}.conf"
         val config = ConfigFactory.parseFile(new File(configPath))
 
-        return ActorSystem(actorSystemName , config)
+        return ActorSystem(actorSystemName, config)
     }
 
     def startLocalCyclonManager(localId: String,
@@ -72,7 +72,7 @@ object DataFlask {
         var initialView: mutable.HashMap[UUID, Peer] = mutable.HashMap()
 
         for((node, index) <- allNodes.split(" ").zipWithIndex) {
-            val newPeer = new DFPeer(index.toString, node, flasksPort.toInt, 10, _age = 0, _position = (index+1)/allNodes.split(" ").length)
+            val newPeer = new DFPeer((index+1).toString, node, flasksPort.toInt, 10, _age = 0, _position = (index+1)/allNodes.split(" ").length)
             if(!newPeer.uuid.equals(localPeer.uuid))
                 initialView += (newPeer.uuid -> newPeer)
         }

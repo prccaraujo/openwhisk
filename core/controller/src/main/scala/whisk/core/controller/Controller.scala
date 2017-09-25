@@ -17,20 +17,20 @@
 
 package whisk.core.controller
 
+import java.io.File
+
 import scala.concurrent.Await
 import scala.concurrent.duration.DurationInt
 import scala.util.{Failure, Success}
-
 import akka.actor._
 import akka.actor.ActorSystem
 import akka.japi.Creator
 import akka.http.scaladsl.server.Route
 import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
-
+import com.typesafe.config.ConfigFactory
 import spray.json._
 import spray.json.DefaultJsonProtocol._
-
 import whisk.common.AkkaLogging
 import whisk.common.Logging
 import whisk.common.LoggingMarkers
@@ -165,7 +165,15 @@ object Controller {
     }
 
     def main(args: Array[String]): Unit = {
-        implicit val actorSystem = ActorSystem("controller-actor-system")
+        val confFolderPath = "/"
+        val actorSystemName = "controller-actor-system"
+
+        val configPath = s"$confFolderPath/${actorSystemName}.conf"
+        val controllerConfig = ConfigFactory.parseFile(new File(configPath))
+
+        implicit val actorSystem = ActorSystem(actorSystemName, controllerConfig)
+
+        //implicit val actorSystem = ActorSystem("controller-actor-system")
         implicit val logger = new AkkaLogging(akka.event.Logging.getLogger(actorSystem, this))
 
         // extract configuration data from the environment

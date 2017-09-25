@@ -189,7 +189,7 @@ class CyclonManager(private val _localPeer: Peer,
       processResponseMessage(msg)
     case msg: PeerInfoRequest =>
       retrievePeerInfo(sender, msg.infoSize)
-    case msg: ControllerTestRequest =>
+    case ControllerTestRequest =>
       logging.info(this, s"Received message from controller ${sender().path.toString}")
     case _ =>
       logging.error(this, s"Received unrecognized message")

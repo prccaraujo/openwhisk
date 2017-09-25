@@ -11,6 +11,12 @@ repositories {
 }
 
 dependencies {
+    compile group: 'com.typesafe.akka', name: 'akka-actor_2.11', version: '2.5.0'
+    compile group: 'com.typesafe.akka', name: 'akka-remote_2.11', version: '2.5.0'
+    compile group: 'com.typesafe.akka', name: 'akka-testkit_2.11', version: '2.5.0'
+    compile group: 'org.scalatest', name: 'scalatest_2.11', version: '3.0.0'
+    compile group: 'com.typesafe', name: 'config', version: '1.2.1'
+    compile project(':core:dataflask')
     compile "org.scala-lang:scala-library:${gradle.scala.version}"
     compile project(':common:scala')
 }

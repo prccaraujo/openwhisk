@@ -16,6 +16,7 @@
     mode: 0777
   become: true
 
+# TODO: Change controller_ip env var so it reads from hosts file (controller{{ groups['controllers'].index(inventory_hostname) }})
 - name: (re)start controller
   docker_container:
     name: controller{{ groups['controllers'].index(inventory_hostname) }}
@@ -31,6 +32,12 @@
 
       "COMPONENT_NAME": "controller{{ groups['controllers'].index(inventory_hostname) }}"
       "PORT": 8080
+
+      "CONTROLLER_IP": "192.168.115.128"
+      "CONTROLLER_PORT": 8080
+      "CONTROLLER_BIND_IP": "0.0.0.0"
+      "CONTROLLER_BIND_PORT": "{{ controller.basePort }}"
+      "CONFIG_PATH": "/"
 
       "WHISK_VERSION_NAME": "{{ whisk_version_name }}"
       "WHISK_VERSION_DATE": "{{ whisk.version.date }}"
@@ -65,7 +72,9 @@
       - "{{ whisk_logs_dir }}/controller{{ groups['controllers'].index(inventory_hostname) }}:/logs"
     ports:
       - "{{ controller.basePort + groups['controllers'].index(inventory_hostname) }}:8080"
-    command: /bin/sh -c "controller/bin/controller {{ groups['controllers'].index(inventory_hostname) }} >> /logs/controller{{ groups['controllers'].index(inventory_hostname) }}_logs.log 2>&1"
+    command: /bin/sh -c "./createConf.sh; controller/bin/controller {{ groups['controllers'].index(inventory_hostname) }}"
+
+# command: /bin/sh -c "controller/bin/controller {{ groups['controllers'].index(inventory_hostname) }} >> /logs/controller{{ groups['controllers'].index(inventory_hostname) }}_logs.log 2>&1"
 
 - name: wait until the Controller in this host is up and running
   uri:

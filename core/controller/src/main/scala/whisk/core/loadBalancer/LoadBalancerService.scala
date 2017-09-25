@@ -27,9 +27,11 @@ import scala.concurrent.duration.DurationInt
 import scala.util.Failure
 import scala.util.Success
 import org.apache.kafka.clients.producer.RecordMetadata
-import akka.actor.{ActorContext, ActorRefFactory, ActorSystem, Props}
+import akka.actor.{ActorContext, ActorRef, ActorRefFactory, ActorSystem, Props}
 import akka.pattern.ask
 import akka.util.Timeout
+import main.scala.communication.Messages.ControllerTestRequest
+import main.scala.peers.{DFPeer, Peer}
 import whisk.common.Logging
 import whisk.common.LoggingMarkers
 import whisk.common.TransactionId
@@ -104,7 +106,7 @@ class LoadBalancerService(
     chooseInvoker(msg.user, action).flatMap { invokerName =>
       val entry = setupActivation(action, msg.activationId, msg.user.uuid, invokerName, transid)
       // logging.info(this, s"Chose Invoker named ${invokerName} with activationId ${msg.activationId} for user ${msg.user.uuid.toString}")(transid)
-      // sendTestMessageToDataFlasks()
+      sendTestMessageToDataFlasks()
       // [LoadBalancerService] Chose Invoker named InstanceId(0)
       // with activationId e5e8ed98932e46a3b9306c8ae6db9645
       // for user 23bc46b1-71f6-4ed5-8c54-816aa4f8c502
@@ -114,14 +116,14 @@ class LoadBalancerService(
       }
     }
   }
-/*
+
   def getPeerActorRef(baseSystemAddress: String, peer: Peer, actorName: String, context: ActorContext): Future[ActorRef] = {
     val path = s"$baseSystemAddress@" +
       s"${peer.ip}:" +
       s"${peer.port}/user/" +
       s"${actorName}${peer.name}"
     logging.info(this, s"Trying to find peer at $path")
-    return context.actorSelection(path).resolveOne(5.seconds)
+    return context.actorSelection(path).resolveOne(10.seconds)
   }
 
   def sendTestMessageToDataFlasks(): Unit = {
@@ -129,17 +131,17 @@ class LoadBalancerService(
     val baseSystemAddress = "akka.tcp://ActorFlasks"
     val peerFindingTimeLimit = 5.seconds
 
-    val peer: Peer = new DFPeer("test", "127.0.0.1", 50000, 1)
+    val peer: Peer = new DFPeer("4", "192.168.115.128", 50000, 1)
 
     getPeerActorRef(baseSystemAddress, peer, "cyclon", context).onComplete{
       case Success(peerRef) =>
-        logging.info(this, s"Sucess at finding peer ${peer.name}")
+        logging.info(this, s"Success at finding peer ${peer.name}")
         peerRef ! ControllerTestRequest
       case Failure(f) =>
         logging.info(this, s"Failure trying to find peer ${peer.name}")
     }
   }
-*/
+
   /** An indexed sequence of all invokers in the current system */
   def allInvokers: Future[IndexedSeq[(InstanceId, InvokerState)]] = invokerPool
     .ask(GetStatus)(Timeout(5.seconds))

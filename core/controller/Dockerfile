@@ -11,7 +11,9 @@ RUN wget --no-verbose https://github.com/swagger-api/swagger-ui/archive/v2.1.4.t
 
 #
 # Copy app jars
+COPY src/main/resources/createConf.sh ./
 COPY build/distributions/controller.tar ./
+
 RUN tar xf controller.tar
 
 EXPOSE 8080
