@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
+/*
 package whisk.core.loadBalancer
 
 import java.nio.charset.StandardCharsets
@@ -331,4 +331,4 @@ object InvokerActor {
     val bufferErrorTolerance = 3
 
     val timerName = "testActionTimer"
-}
+}*/

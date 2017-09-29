@@ -99,7 +99,7 @@ class Controller(
     private implicit val activationStore = WhiskActivationStore.datastore(whiskConfig)
 
     // initialize backend services
-    private implicit val loadBalancer = new LoadBalancerService(whiskConfig, instance, entityStore, context)
+    private implicit val loadBalancer = new LoadBalancerService(whiskConfig, instance, entityStore)
     private implicit val entitlementProvider = new LocalEntitlementProvider(whiskConfig, loadBalancer)
     private implicit val activationIdFactory = new ActivationIdGenerator {}
 
@@ -120,8 +120,8 @@ class Controller(
         (path("invokers") & get) {
             complete {
                 loadBalancer.allInvokers.map(_.map {
-                    case (instance, state) => s"invoker${instance.toInt}" -> state.asString
-                }.toMap.toJson.asJsObject)
+                    case instance => s"invoker${instance.toInt}"
+                }.toJson.asJsObject)
             }
         }
     }

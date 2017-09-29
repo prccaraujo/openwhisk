@@ -32,7 +32,6 @@ import spray.json._
 import spray.json.DefaultJsonProtocol._
 import whisk.common.{Counter, Logging, LoggingMarkers, TransactionId}
 import whisk.common.AkkaLogging
-import whisk.common.Scheduler
 import whisk.core.WhiskConfig
 import whisk.core.WhiskConfig.{dockerImagePrefix, dockerRegistry, invokerUseReactivePool, kafkaHost, logsDir, servicePort}
 import whisk.core.connector.{ActivationMessage, CompletionMessage}
@@ -443,6 +442,14 @@ object Invoker {
         ContainerPool.requiredProperties ++
         kafkaHost
 
+    def pingController(producer: MessageProducer, logger: Logging, invokerInstance: InstanceId)(implicit ec: ExecutionContext): Unit = {
+        producer.send("health", PingMessage(invokerInstance)).andThen {
+            case Failure(t) =>
+                logger.error(this, s"failed to ping the controller: $t\n Retrying")
+                pingController _
+        }
+    }
+
     def main(args: Array[String]): Unit = {
         require(args.length == 1, "invoker instance required")
         val invokerInstance = InstanceId(args(0).toInt)
@@ -490,15 +497,12 @@ object Invoker {
         dispatcher.addHandler(invoker, true)
         dispatcher.start()
 
-        Scheduler.scheduleWaitAtMost(1.seconds)(() => {
-            producer.send("health", PingMessage(invokerInstance)).andThen {
-                case Failure(t) => logger.error(this, s"failed to ping the controller: $t")
-            }
-        })
+        //pingController(producer, logger, invokerInstance)
 
         val port = config.servicePort.toInt
 
         BasicHttpService.startService(actorSystem, "invoker", "0.0.0.0", new Creator[InvokerServer] {
+            logger.info(this, s"Invoker $invoker started")
             def create = new InvokerServer(invokerInstance, invokerInstance.toInt, port)
         })
     }
