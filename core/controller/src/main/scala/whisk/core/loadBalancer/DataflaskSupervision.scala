@@ -2,15 +2,18 @@ package whisk.core.loadBalancer
 
 import scala.collection.mutable
 import scala.concurrent.duration._
-import akka.actor.Actor
-import akka.actor.ActorRef
-import akka.actor.ActorRefFactory
-import akka.actor.Props
+import akka.actor.{Actor, ActorRef, ActorRefFactory, Props}
 import akka.util.Timeout
+import akka.pattern.ask
+import main.scala.communication.Messages.{PeerInfoRequest, PeerInfoResponse}
+import main.scala.peers.{DFPeer, Peer}
 import whisk.common.AkkaLogging
 import whisk.common.RingBuffer
 import whisk.core.connector._
 import whisk.core.entity._
+
+import scala.concurrent.{Await, Future}
+import scala.util.{Failure, Success}
 
 // Received events
 case object GetInvokers
@@ -27,9 +30,21 @@ class DataFlaskPool(
                    pingConsumer: MessageConsumer) extends Actor {
 
   //implicit val transid = TransactionId.invokerHealth
+  val timeoutTime = 15.seconds
+  val dataFlasksBaseSystemAddress = "akka.tcp://ActorFlasks"
+  val localDataFlaskIp = sys.env("DATAFLASK_IP")
+  val localDataFlaskPort = sys.env("DATAFLASK_PORT")
+  val localDataFlaskPrefix = "cyclon"
+  val localDataFlaskName= "999"
+
   implicit val logging = new AkkaLogging(context.system.log)
-  implicit val timeout = Timeout(5.seconds)
+  implicit val timeout = Timeout(timeoutTime)
   implicit val ec = context.dispatcher
+  implicit val localDataFlaskPeer = new DFPeer(localDataFlaskName, localDataFlaskIp, localDataFlaskPort.toInt, 0)
+  implicit var localDataFlaskRef : ActorRef = _
+
+  //Resolve local dataflasks actor reference
+  resolveDataFlaskActorRef(dataFlasksBaseSystemAddress, localDataFlaskPeer)
 
   // State of the actor. It's important not to close over these
   // references directly, so they don't escape the Actor.
@@ -41,11 +56,20 @@ class DataFlaskPool(
 
   def receive = {
 
+    //TODO: Construct message to ask for invokers
+    //TODO: Use OnComplete (o erro atual é que está a dar timeout, mas ainda não descobri onde)
     case GetInvokers => {
-      status = status :+ InstanceId(0)
-      sender() ! status
-      logging.info(this, s"Received GetInfokers msg")
-      logging.info(this, s"Returned ${status.head}")
+      logging.info(this, s"Received GetInvokers msg")
+      //status = status :+ InstanceId(0)
+      val response = localDataFlaskRef ? PeerInfoRequest(2)
+
+      val peerList = Await.result(response, 10.seconds).asInstanceOf[PeerInfoResponse]
+      sender() ! peerList.listBuffer.map(peer => InstanceId(peer.name.toInt)).toIndexedSeq
+      //response.onComplete {
+      //  case Success(message: PeerInfoResponse) => sender() ! message.listBuffer.map(peer => InstanceId(peer.name.toInt)).toIndexedSeq
+      //  case Success(message) => sender() ! status
+      //  case Failure(f) => sender() ! status
+      //}
     }
 
     //TODO: Adaptar para dataflasks
@@ -55,32 +79,25 @@ class DataFlaskPool(
     }
   }
 
-/*
-  def getPeerActorRef(baseSystemAddress: String, peer: Peer, actorName: String, context: ActorContext): Future[ActorRef] = {
+  def resolveDataFlaskActorRef(baseSystemAddress: String, peer: DFPeer): Unit = {
+    getPeerActorRef(baseSystemAddress, peer, localDataFlaskPrefix).onComplete{
+      case Success(peerRef) =>
+        logging.info(this, s"Success at finding peer ${peer.name}")
+        localDataFlaskRef = peerRef
+      case Failure(f) =>
+        logging.info(this, s"Failure trying to find peer ${peer.name}")
+        resolveDataFlaskActorRef _
+    }
+  }
+
+  def getPeerActorRef(baseSystemAddress: String, peer: Peer, actorName: String): Future[ActorRef] = {
     val path = s"$baseSystemAddress@" +
       s"${peer.ip}:" +
       s"${peer.port}/user/" +
       s"${actorName}${peer.name}"
     logging.info(this, s"Trying to find peer at $path")
-    return context.actorSelection(path).resolveOne(10.seconds)
+    return context.actorSelection(path).resolveOne(timeoutTime)
   }
-
-  def sendTestMessageToDataFlasks(): Unit = {
-    val system = akka.actor.ActorSystem("ActorFlasks")
-    val baseSystemAddress = "akka.tcp://ActorFlasks"
-    val peerFindingTimeLimit = 5.seconds
-
-    val peer: Peer = new DFPeer("4", "192.168.115.128", 50000, 1)
-
-    getPeerActorRef(baseSystemAddress, peer, "cyclon", context).onComplete{
-      case Success(peerRef) =>
-        logging.info(this, s"Success at finding peer ${peer.name}")
-        peerRef ! ControllerTestRequest
-      case Failure(f) =>
-        logging.info(this, s"Failure trying to find peer ${peer.name}")
-    }
-  }
-*/
 
   /** Pads a list to a given length using the given function to compute entries */
   //TODO: Provavelmente não utilizar depois. Ao receber um invoker, preenche a lista com os numeros que faltam até ao invoker recebido

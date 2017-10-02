@@ -35,8 +35,4 @@ object Messages {
 
   /*Fake reliever messages*/
   case class RelieveLoadMessage() extends Serializable
-
-  //TODO: Delete this
-  case class ControllerTestRequest() extends Serializable
-  case class ControllerTestResponse() extends Serializable
 }

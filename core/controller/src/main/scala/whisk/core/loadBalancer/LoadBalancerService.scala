@@ -237,7 +237,9 @@ class LoadBalancerService(
       val invokersToUse = if (action.exec.pull) blackboxInvokers(invokers) else managedInvokers(invokers)
       val invokersWithUsage = invokersToUse.view.map {
         // Using a view defers the comparably expensive lookup to actual access of the element
-        case instance => (instance, loadBalancerData.activationCountOn(instance))
+        case instance =>
+          logging.info(this, s"Found invoker with instance id ${instance.toInt}")
+          (instance, loadBalancerData.activationCountOn(instance))
       }
 
      LoadBalancerService.schedule(invokersWithUsage, hash) match {

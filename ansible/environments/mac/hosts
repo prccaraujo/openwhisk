@@ -21,6 +21,9 @@ ansible ansible_connection=local
 [db]
 172.17.0.1 ansible_connection=local
 
+[dataflasks:children]
+invokers
+
 [redis]
 172.17.0.1 ansible_connection=local
 

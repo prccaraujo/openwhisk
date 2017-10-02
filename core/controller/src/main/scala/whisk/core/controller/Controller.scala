@@ -77,7 +77,7 @@ class Controller(
 
     override val numberOfInstances = whiskConfig.controllerInstances.toInt
 
-    TransactionId.controller.mark(this, LoggingMarkers.CONTROLLER_STARTUP(instance.toInt), s"starting controller instance ${instance.toInt}")
+   TransactionId.controller.mark(this, LoggingMarkers.CONTROLLER_STARTUP(instance.toInt), s"starting controller instance ${instance.toInt}")
 
     /**
       * A Route in Akka is technically a function taking a RequestContext as a parameter.
