@@ -76,6 +76,8 @@ object DockerContainer {
             case (key, value) => Seq("-e", s"$key=$value")
         }.flatten
 
+        val fileSystemVolume = sys.env("DATAFLASK_VOLUME")
+
         val dnsArgs = dnsServers.map(Seq("--dns", _)).flatten
 
         val args = Seq(
@@ -86,7 +88,8 @@ object DockerContainer {
             "--cpu-shares", cpuShares.toString,
             "--memory", s"${memory.toMB}m",
             "--memory-swap", s"${memory.toMB}m",
-            "--network", network) ++
+            "--network", network,
+            "-v", fileSystemVolume) ++
             dnsArgs ++
             environmentArgs ++
             name.map(n => Seq("--name", n)).getOrElse(Seq.empty)

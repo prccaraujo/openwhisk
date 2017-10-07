@@ -102,7 +102,9 @@ class LoadBalancerService(
     implicit transid: TransactionId): Future[Future[Either[ActivationId, WhiskActivation]]] = {
     chooseInvoker(msg.user, action).flatMap { invokerName =>
       val entry = setupActivation(action, msg.activationId, msg.user.uuid, invokerName, transid)
-
+      //logging.info(this, "------------------- ANNOTATIONS -----------------")
+      //logging.info(this, action.annotations.get("test").toString)
+      //logging.info(this, action.annotations.toString)
       sendActivationToInvoker(messageProducer, msg, invokerName).map { _ =>
         entry.promise.future
       }
@@ -112,7 +114,7 @@ class LoadBalancerService(
   /** An indexed sequence of all invokers in the current system */
   //TODO: Agora o ask pergunta é sobre nodos dataflask
   def allInvokers: Future[IndexedSeq[InstanceId]] = dataflaskPool
-    .ask(GetInvokers)(Timeout(5.seconds))
+    .ask(GetInvokers)(Timeout(15.seconds))
     .mapTo[IndexedSeq[InstanceId]]
 
   /**

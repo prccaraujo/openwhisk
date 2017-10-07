@@ -4,15 +4,15 @@ import scala.collection.mutable
 import scala.concurrent.duration._
 import akka.actor.{Actor, ActorRef, ActorRefFactory, Props}
 import akka.util.Timeout
-import akka.pattern.ask
 import main.scala.communication.Messages.{PeerInfoRequest, PeerInfoResponse}
+import akka.pattern.ask
 import main.scala.peers.{DFPeer, Peer}
 import whisk.common.AkkaLogging
 import whisk.common.RingBuffer
 import whisk.core.connector._
 import whisk.core.entity._
 
-import scala.concurrent.{Await, Future}
+import scala.concurrent.{Future}
 import scala.util.{Failure, Success}
 
 // Received events
@@ -57,19 +57,22 @@ class DataFlaskPool(
   def receive = {
 
     //TODO: Construct message to ask for invokers
-    //TODO: Use OnComplete (o erro atual é que está a dar timeout, mas ainda não descobri onde)
+    //TODO: Use OnComplete (o erro atual é que está a dar timeout - o do LoadBalancerService)
+    //TODO: Testar esta hipotese de o sender ser diferente no contexto do onComplete
     case GetInvokers => {
       logging.info(this, s"Received GetInvokers msg")
-      //status = status :+ InstanceId(0)
+     val balancer = sender()
       val response = localDataFlaskRef ? PeerInfoRequest(2)
 
-      val peerList = Await.result(response, 10.seconds).asInstanceOf[PeerInfoResponse]
-      sender() ! peerList.listBuffer.map(peer => InstanceId(peer.name.toInt)).toIndexedSeq
-      //response.onComplete {
-      //  case Success(message: PeerInfoResponse) => sender() ! message.listBuffer.map(peer => InstanceId(peer.name.toInt)).toIndexedSeq
-      //  case Success(message) => sender() ! status
-      //  case Failure(f) => sender() ! status
-      //}
+       //status = status :+ InstanceId(0)
+      //sender() ! status
+      //val peerList = Await.result(response, 10.seconds).asInstanceOf[PeerInfoResponse]
+      //sender() ! peerList.listBuffer.map(peer => InstanceId(peer.name.toInt)).toIndexedSeq
+      response.onComplete {
+        case Success(message: PeerInfoResponse) => balancer ! message.listBuffer.map(peer => InstanceId(peer.name.toInt)).toIndexedSeq
+        case Success(message) => balancer ! status
+        case Failure(f) => balancer ! status
+      }
     }
 
     //TODO: Adaptar para dataflasks
@@ -85,7 +88,7 @@ class DataFlaskPool(
         logging.info(this, s"Success at finding peer ${peer.name}")
         localDataFlaskRef = peerRef
       case Failure(f) =>
-        logging.info(this, s"Failure trying to find peer ${peer.name}")
+        logging.info(this, s"Failure trying to find peer ${peer.name} - ${f.toString}")
         resolveDataFlaskActorRef _
     }
   }

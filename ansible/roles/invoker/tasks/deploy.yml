@@ -4,22 +4,22 @@
 - include: docker_login.yml
 
 - name: "pull invoker image with tag {{docker.image.tag}}"
-  shell: "docker pull {{docker_registry}}{{item}}:{{docker.image.tag}}"
+  shell: "docker pull prccaraujo/invoker:{{docker.image.tag}}"
   with_items:
-    - '{{ docker.image.prefix }}/invoker'
+    - 'prccaraujo/invoker'
   when: docker_registry != ""
   retries: "{{ docker.pull.retries }}"
   delay: "{{ docker.pull.delay }}"
 
 - name: "pull runtime action images with tag {{docker.image.tag}}"
-  shell: "docker pull {{docker_registry}}{{docker.image.prefix}}/{{item}}:{{docker.image.tag}}"
+  shell: "docker pull openwhisk/{{item}}:{{docker.image.tag}}"
   with_items: "{{ runtimesManifest.runtimes.values() | sum(start=[]) | selectattr('deprecated', 'equalto',false)  | map(attribute='image.name') | list | unique }}"
   when: docker_registry != ""
   retries: "{{ docker.pull.retries }}"
   delay: "{{ docker.pull.delay }}"
 
 - name: "pull blackboxes action images with tag {{docker.image.tag}}"
-  shell: "docker pull {{docker_registry}}{{docker.image.prefix}}/{{item.name}}:{{docker.image.tag}}"
+  shell: "docker pull openwhisk/{{item.name}}:{{docker.image.tag}}"
   with_items:
     - "{{ runtimesManifest.blackboxes }}"
   when: docker_registry != ""
@@ -85,9 +85,9 @@
         -e WHISK_API_HOST_NAME='{{ whisk_api_host_name | default(groups['edge'] | first) }}'
         -e RUNTIMES_MANIFEST='{{ runtimesManifest | to_json }}'
         -e SELF_DOCKER_ENDPOINT='localhost'
-        -e DOCKER_REGISTRY='{{ docker_registry }}'
-        -e DOCKER_IMAGE_PREFIX='{{ docker.image.prefix }}'
-        -e DOCKER_IMAGE_TAG='{{ docker.image.tag }}'
+        -e DOCKER_REGISTRY=''
+        -e DOCKER_IMAGE_PREFIX='openwhisk'
+        -e DOCKER_IMAGE_TAG='latest'
         -e INVOKER_CONTAINER_NETWORK='{{ invoker_container_network_name | default("bridge") }}'
         -e INVOKER_CONTAINER_POLICY='{{ invoker_container_policy_name | default()}}'
         -e INVOKER_CONTAINER_DNS='{{ invoker_container_network_dns_servers | default()}}'
@@ -98,13 +98,15 @@
         -e INVOKER_USERUNC='{{ invoker_use_runc | default(invoker.useRunc) }}'
         -e INVOKER_USEREACTIVEPOOL='{{ invoker.useReactivePool }}'
         -e WHISK_LOGS_DIR='{{ whisk_logs_dir }}'
+        -e DATAFLASK_VOLUME='/Users/paulo/Dropbox/Thesis/dev/openwhisk/test_dir:/home'
         -v /sys/fs/cgroup:/sys/fs/cgroup
         -v /run/runc:/run/runc
         -v {{ whisk_logs_dir }}/invoker{{ groups['invokers'].index(inventory_hostname) }}:/logs
         -v {{ dockerInfo["json"]["DockerRootDir"] }}/containers/:/containers
         -v {{ docker_sock | default('/var/run/docker.sock') }}:/var/run/docker.sock
+        -v /Users/paulo/Dropbox/Thesis/dev/openwhisk/test_dir:/home
         -p {{ invoker.port + groups['invokers'].index(inventory_hostname) }}:8080
-        {{ docker_registry }}{{ docker.image.prefix }}/invoker:{{ docker.image.tag }}
+        prccaraujo/invoker:{{ docker.image.tag }}
         /bin/sh -c "exec /invoker/bin/invoker {{ groups['invokers'].index(inventory_hostname) }}"
   when: invokerInfo.json|length == 0
 

@@ -173,8 +173,13 @@ class CyclonManager(private val _localPeer: Peer,
 
   def retrievePeerInfo(target: ActorRef, infoSize: Int): Unit = {
     val messagePeerInfo = getRandomGlobal(infoSize)
+    var response = ListBuffer[Peer]()
 
-    target ! PeerInfoResponse(messagePeerInfo)
+    messagePeerInfo.foreach { peer =>
+      if(!peer.equals(localPeer)) response += peer
+    }
+
+    target ! PeerInfoResponse(response)
   }
 
   override def receive: Receive = {
@@ -190,7 +195,11 @@ class CyclonManager(private val _localPeer: Peer,
     case msg: PeerInfoRequest =>
       println(this, s"Received message from controller ${sender().path.toString}")
       logging.info(this, s"Received message from controller ${sender().path.toString}")
-      retrievePeerInfo(sender, msg.infoSize)
+      //retrievePeerInfo(sender, msg.infoSize)
+      //TODO: Remove testing
+      var response = new ListBuffer[Peer]
+      response += new DFPeer("0", "0.0.0.0", 50000, 0)
+      sender ! PeerInfoResponse(response)
     case _ =>
       logging.error(this, s"Received unrecognized message")
   }

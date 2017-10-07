@@ -2,6 +2,7 @@ apply plugin: 'scala'
 apply plugin: 'application'
 apply plugin: 'eclipse'
 
+ext.dockerImagePrefix = 'prccaraujo'
 ext.dockerImageName = 'invoker'
 apply from: '../../gradle/docker.gradle'
 distDocker.dependsOn ':common:scala:distDocker', 'distTar'
