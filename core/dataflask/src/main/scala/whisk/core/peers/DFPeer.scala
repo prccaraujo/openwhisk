@@ -2,15 +2,17 @@ package main.scala.peers
 
 import java.util.UUID
 
+import main.scala.communication.Messages.ComputingEnv
+
 import scala.util.Random
 
 // Encapsulates Node info
 class DFPeer(val id: String,
              private val _ip: String,
              private val _port: Int,
-             private val _capacity: Int,
              private var _age: Int = 0,
-             private val _position: Double = Random.nextDouble()) extends Peer with Serializable {
+             private val _position: Double = Random.nextDouble(),
+             private val _env: ComputingEnv.EnvVal = ComputingEnv.Cloud) extends Peer with Serializable {
 
   val uuid: UUID = UUID.nameUUIDFromBytes(id.getBytes())
 
@@ -20,7 +22,7 @@ class DFPeer(val id: String,
   def port: Int = _port
   def age: Int = _age
   def position: Double = _position
-  def capacity: Int = _capacity
+  def env: ComputingEnv.EnvVal = _env
 
   def increaseAgeByOne = _age += 1
 
@@ -34,6 +36,6 @@ class DFPeer(val id: String,
   }
 
   override def clone(): DFPeer = {
-    return new DFPeer(this.id, this._ip, this._port, this._capacity, this._age, this._position)
+    return new DFPeer(this.id, this._ip, this._port, this._age, this._position)
   }
 }

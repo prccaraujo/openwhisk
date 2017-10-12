@@ -13,6 +13,14 @@ object Configs {
     val maxGroupSize = 6
   }
 
+  object HybridGroupManagerConfig {
+    val growingFactor = 2
+    val minGroupSizeEdge = 3
+    val maxGroupSizeEdge = 6
+    val minGroupSizeCloud = 2
+    val maxGroupSizeCloud = 4
+  }
+
   object ActionManagerConfig {
     val relieverInterval = 1.second
     val initialDissemination = 3

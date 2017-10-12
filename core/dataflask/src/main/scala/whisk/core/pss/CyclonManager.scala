@@ -4,18 +4,21 @@ import java.util.UUID
 
 import akka.actor._
 import main.scala.communication.Messages._
-import main.scala.group.GroupManager
 import main.scala.peers.{DFPeer, Peer}
 import whisk.common.Logging
+import whisk.core.computing.{ComputingOperation, OperationsManager}
+import whisk.core.group.HybridGroupManager
 
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
+import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{Failure, Random, Success}
 
 class CyclonManager(private val _localPeer: Peer,
                     val initialView: mutable.HashMap[UUID, Peer],
-                    val groupManager: GroupManager = null)(implicit logging: Logging) extends Actor {
+                    val groupManager: HybridGroupManager = null,
+                    val operationsManager: OperationsManager = null)(implicit logging: Logging) extends Actor {
 
   import main.scala.config.Configs.CyclonManagerConfig._
   import main.scala.config.Configs.SystemConfig._
@@ -24,6 +27,7 @@ class CyclonManager(private val _localPeer: Peer,
   var localView: mutable.HashMap[UUID, Peer] = initialView
   var sentPeerData: ListBuffer[Peer] = ListBuffer[Peer]()
   def localPeer: Peer = _localPeer
+  var processedOperationRequests: mutable.Set[Long] = mutable.Set[Long]()
 
   def insertSentToView(source: ListBuffer[Peer] = sentPeerData): Unit = {
     var peersToProcess: ListBuffer[Peer] = if(source == null) sentPeerData else source
@@ -81,8 +85,11 @@ class CyclonManager(private val _localPeer: Peer,
 
     //Shuffle to avoid duplicate dissemination cycles and conform to message size
     localView.values.foreach{ peer =>
-      if (!peer.equals(target))
+      if (target != null && !peer.equals(target)){
         toDisseminate += peer.asInstanceOf[DFPeer].clone() //TODO: Test
+      } else {
+        toDisseminate += peer.asInstanceOf[DFPeer].clone()
+      }
     }
 
     toDisseminate = Random.shuffle(toDisseminate)
@@ -98,7 +105,7 @@ class CyclonManager(private val _localPeer: Peer,
     return toDisseminate.toSet
   }
 
-  def sendMessageToPeer(peer: Peer, message: CyclonMessage): Unit = {
+  def sendMessageToPeer(peer: Peer, message: Message): Unit = {
     getPeerActorRef(peer, cyclonManagerPathPrefix, context).onComplete{
        case Success(peerRef) =>
          println(s"Success at finding peer ${peer.name}")
@@ -182,6 +189,59 @@ class CyclonManager(private val _localPeer: Peer,
     target ! PeerInfoResponse(response)
   }
 
+  def processOperationRequest(operation: ComputingOperation, source: ActorRef): Unit = {
+    if (!processedOperationRequests.contains(operation.id)) {
+      processedOperationRequests += operation.id
+      logging.info(this, "Processing operation request from controller")
+
+      disseminateOperationRequest(operation, source)
+
+      if (operationsManager.canComputeOperation(operation)) {
+        logging.info(this, "CAN COMPUTE OPERATION!")
+        if (groupManager.holdsDataTag(operation.tag)) {
+          logging.info(this, "HOLDS TAG!")
+          operationsManager.bookOperationTemporarily(operation)
+
+          //Respond to controller
+          logging.info(this, s"RESPONDING TO CONTROLLER WITH OPERATION RESPONSE MESSAGE: ${source.path}")
+          source ! OperationResponseMessage(operation.id, operationsManager.getCurrentFreeMemory(), localPeer)
+
+          getControllerRef.onComplete{
+            case Success(peerRef) =>
+              println(s"Success at finding controller ${peerRef.path.toString}")
+              //peerRef ! OperationResponseMessage(operation.id, operationsManager.getCurrentFreeMemory(), localPeer)
+            case Failure(f) =>
+              logging.error(this, s"Failure trying controller ${f.toString}")
+          }
+        }
+      }
+    }
+  }
+
+  def disseminateOperationRequest(operation: ComputingOperation, source: ActorRef): Unit = {
+      val toDisseminate: Set[Peer] = selectPeerInfoToDisseminate(null)
+      val operationMessage = new OperationRequestMessage(operation, source)
+
+      toDisseminate.foreach { peer =>
+        sendMessageToPeer(peer, operationMessage)
+      }
+  }
+
+ //TODO: Refactor this if it works (pass as env vals or create a peer that can be passed)
+  def getControllerRef(): Future[ActorRef] = {
+      val actorSystemName = "controller-actor-system"
+
+      val baseSystemAddress = s"akka.tcp://$actorSystemName"
+      val peerFindingTimeLimit = 10.seconds
+
+      val path = s"$baseSystemAddress@" +
+        "192.168.115.128:" +
+        "10001/user/" +
+        "$a"
+
+      return context.actorSelection(path).resolveOne(peerFindingTimeLimit)
+  }
+
   override def receive: Receive = {
     case msg: CyclonManagerStartMessage =>
       logging.info(this, s"Cyclon Manager Started")
@@ -192,14 +252,18 @@ class CyclonManager(private val _localPeer: Peer,
       processRequestMessage(msg)
     case msg: CyclonResponseMessage =>
       processResponseMessage(msg)
+/*
     case msg: PeerInfoRequest =>
       println(this, s"Received message from controller ${sender().path.toString}")
       logging.info(this, s"Received message from controller ${sender().path.toString}")
       //retrievePeerInfo(sender, msg.infoSize)
-      //TODO: Remove testing
       var response = new ListBuffer[Peer]
       response += new DFPeer("0", "0.0.0.0", 50000, 0)
       sender ! PeerInfoResponse(response)
+*/
+    case msg: OperationRequestMessage =>
+      logging.info(this, s"Received operation request from ${msg.source.path}")
+      processOperationRequest(msg.operation, msg.source)
     case _ =>
       logging.error(this, s"Received unrecognized message")
   }

@@ -2,6 +2,8 @@ package main.scala.peers
 
 import java.util.UUID
 
+import main.scala.communication.Messages.ComputingEnv
+
 trait Peer {
   def name: String
   def uuid: UUID
@@ -9,5 +11,5 @@ trait Peer {
   def position: Double
   def ip: String
   def port: Int
-  def capacity: Int
+  def env: ComputingEnv.EnvVal
 }
