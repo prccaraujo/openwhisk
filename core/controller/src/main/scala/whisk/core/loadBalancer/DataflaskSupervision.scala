@@ -4,19 +4,23 @@ import scala.collection.mutable
 import scala.concurrent.duration._
 import akka.actor.{Actor, ActorRef, ActorRefFactory, Props}
 import akka.util.Timeout
-import main.scala.communication.Messages.{PeerInfoRequest, PeerInfoResponse}
-import akka.pattern.ask
+import main.scala.communication.Messages._
 import main.scala.peers.{DFPeer, Peer}
 import whisk.common.AkkaLogging
 import whisk.common.RingBuffer
+import whisk.core.computing.ComputingOperation
 import whisk.core.connector._
 import whisk.core.entity._
 
-import scala.concurrent.{Future}
+import scala.concurrent.Future
 import scala.util.{Failure, Success}
 
 // Received events
-case object GetInvokers
+case class GetInvokers(numberOfInvokers: Int,
+                       transid: Long,
+                       actionDataTag: String,
+                       actionMinExpectedMem: Double,
+                       actionEnv: ComputingEnv.EnvVal)
 
 case class ActivationRequest(msg: ActivationMessage, invoker: InstanceId)
 case class InvocationFinishedMessage(invokerInstance: InstanceId, successful: Boolean)
@@ -53,27 +57,58 @@ class DataFlaskPool(
   //TODO: No futuro pode-se guardar aqui a info sobre cada instance id, da mesma forma que originalmente se guardava o state.
   //TODO: No entanto esta info não vai servir para nada possivelmente
   var status = IndexedSeq[InstanceId]()
+  //Maps operation id to (number of required invokers, invokers that responded already)
+  var requestToInvokers = mutable.Map[Long, (Int, mutable.Seq[InstanceId])]()
+  var balancerRef: ActorRef = _
 
+  //TODO: At this moment this is implement as if every operation responds in order to the load balancer
+  // (can bring problems, f.e. by returning invokers to the wrong request)
+  //This means that the controller is also assigning the operations in order to the invokers.
+  //TODO: Schedule a self message to respond to controller (não necessário porque pode simplesmente dar timeout do lado do controller)
   def receive = {
 
-    //TODO: Construct message to ask for invokers
-    //TODO: Use OnComplete (o erro atual é que está a dar timeout - o do LoadBalancerService)
-    //TODO: Testar esta hipotese de o sender ser diferente no contexto do onComplete
-    case GetInvokers => {
+    case msg: GetInvokers => {
       logging.info(this, s"Received GetInvokers msg")
-     val balancer = sender()
-      val response = localDataFlaskRef ? PeerInfoRequest(2)
+      balancerRef = sender()
 
-       //status = status :+ InstanceId(0)
+      //Create request
+      val request = OperationRequestMessage(
+        new ComputingOperation(
+          msg.transid,
+          msg.actionDataTag,
+          msg.actionMinExpectedMem,
+          msg.actionEnv), this.context.self) //val request = PeerInfoRequest(2)
+
+      //Open entry for the request
+      requestToInvokers += (msg.transid -> (msg.numberOfInvokers, mutable.Seq[InstanceId]()))
+
+      localDataFlaskRef ! request
+
+      //status = status :+ InstanceId(0)
       //sender() ! status
       //val peerList = Await.result(response, 10.seconds).asInstanceOf[PeerInfoResponse]
       //sender() ! peerList.listBuffer.map(peer => InstanceId(peer.name.toInt)).toIndexedSeq
-      response.onComplete {
-        case Success(message: PeerInfoResponse) => balancer ! message.listBuffer.map(peer => InstanceId(peer.name.toInt)).toIndexedSeq
-        case Success(message) => balancer ! status
-        case Failure(f) => balancer ! status
-      }
+      //response.onComplete {
+        //case Success(message: PeerInfoResponse) => balancer ! message.listBuffer.map(peer => InstanceId(peer.name.toInt)).toIndexedSeq
+      //  case Success(message: OperationResponseMessage) => balancer ! message.listBuffer.map(peer => InstanceId(peer.name.toInt)).toIndexedSeq
+      //  case Success(message) => balancer ! status
+      //  case Failure(f) => balancer ! status
+      //}
     }
+
+      //TODO: Test
+    case msg: OperationResponseMessage =>
+      logging.info(this, s"RECEIVED OPERATION RESPONSE MSG FROM ${msg.peer.name}")
+      val currentState: (Int, mutable.Seq[InstanceId]) = requestToInvokers.get(msg.operationId).getOrElse(null)
+      if (currentState != null) {
+        if (currentState._1 <= currentState._2.size) {
+          balancerRef ! currentState._2.toIndexedSeq
+          requestToInvokers -= msg.operationId
+        } else {
+          logging.info(this, s"ADDED PEER ${msg.peer.name} FOR OPERATION ${msg.operationId}")
+          requestToInvokers(msg.operationId) = (requestToInvokers(msg.operationId)._1, requestToInvokers(msg.operationId)._2 :+ InstanceId(msg.peer.name.toInt))
+        }
+      }
 
     //TODO: Adaptar para dataflasks
     case msg: InvocationFinishedMessage => {

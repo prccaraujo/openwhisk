@@ -9,6 +9,7 @@
 echo "akka {
   actor {
     provider = \"akka.remote.RemoteActorRefProvider\"
+    warn-about-java-serializer-usage = false
   }
   remote {
     enabled-transports = [\"akka.remote.netty.tcp\"]
@@ -19,4 +20,11 @@ echo "akka {
       bind-port = ${CONTROLLER_BIND_PORT}
     }
  }
+  http {
+    parsing {
+        # The limits for the various parts of the HTTP message parser.
+        max-method-length = 100M
+        max-content-length = infinite
+     }
+  }
 }" > $CONFIG_PATH/controller-actor-system.conf

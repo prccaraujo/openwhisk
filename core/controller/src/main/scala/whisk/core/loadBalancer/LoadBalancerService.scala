@@ -29,6 +29,7 @@ import org.apache.kafka.clients.producer.RecordMetadata
 import akka.actor.{ActorRefFactory, ActorSystem, Props}
 import akka.pattern.ask
 import akka.util.Timeout
+import main.scala.communication.Messages.ComputingEnv
 import whisk.common.Logging
 import whisk.common.LoggingMarkers
 import whisk.common.TransactionId
@@ -100,21 +101,27 @@ class LoadBalancerService(
   //TODO: Mais tarde, os metadados para escolher invoker vão estar incluidos na ActivationMessage
   override def publish(action: ExecutableWhiskAction, msg: ActivationMessage)(
     implicit transid: TransactionId): Future[Future[Either[ActivationId, WhiskActivation]]] = {
-    chooseInvoker(msg.user, action).flatMap { invokerName =>
+
+    val actionDataTag: String = action.annotations.get("tag").getOrElse("").toString
+    val actionMinExpectedMem: Double = action.annotations.get("min_mem").getOrElse("0").toString.toDouble
+    val actionEnv: ComputingEnv.EnvVal = ComputingEnv.getFromString(action.annotations.get("env").getOrElse("ANY").toString)
+
+    logging.info(this, s"RECEIVED PUBLISH REQUEST WITH PARAMS tag: ${actionDataTag} mem: ${actionMinExpectedMem} env: ${actionEnv.toString}")
+
+    chooseInvoker(msg.user, action, transid, actionDataTag, actionMinExpectedMem, actionEnv).flatMap { invokerName =>
       val entry = setupActivation(action, msg.activationId, msg.user.uuid, invokerName, transid)
-      //logging.info(this, "------------------- ANNOTATIONS -----------------")
-      //logging.info(this, action.annotations.get("test").toString)
-      //logging.info(this, action.annotations.toString)
       sendActivationToInvoker(messageProducer, msg, invokerName).map { _ =>
         entry.promise.future
       }
     }
   }
 
-  /** An indexed sequence of all invokers in the current system */
-  //TODO: Agora o ask pergunta é sobre nodos dataflask
-  def allInvokers: Future[IndexedSeq[InstanceId]] = dataflaskPool
-    .ask(GetInvokers)(Timeout(15.seconds))
+  /** An indexed sequence of all invokers in the current system able to execute a given function*/
+  def allInvokers(transid: TransactionId,
+                  actionDataTag: String,
+                  actionMinExpectedMem: Double,
+                  actionEnv: ComputingEnv.EnvVal): Future[IndexedSeq[InstanceId]] = dataflaskPool
+    .ask(GetInvokers(2, transid.id, actionDataTag, actionMinExpectedMem, actionEnv))(Timeout(15.seconds))
     .mapTo[IndexedSeq[InstanceId]]
 
   /**
@@ -232,10 +239,11 @@ class LoadBalancerService(
   }
 
   /** Determine which invoker this activation should go to. Due to dynamic conditions, it may return no invoker. */
-  private def chooseInvoker(user: Identity, action: ExecutableWhiskAction): Future[InstanceId] = {
+  private def chooseInvoker(user: Identity, action: ExecutableWhiskAction, transid: TransactionId,
+                            actionDataTag: String, actionMinExpectedMem: Double, actionEnv: ComputingEnv.EnvVal): Future[InstanceId] = {
     val hash = generateHash(user.namespace, action)
 
-    allInvokers.flatMap { invokers =>
+    allInvokers(transid, actionDataTag, actionMinExpectedMem, actionEnv).flatMap { invokers =>
       val invokersToUse = if (action.exec.pull) blackboxInvokers(invokers) else managedInvokers(invokers)
       val invokersWithUsage = invokersToUse.view.map {
         // Using a view defers the comparably expensive lookup to actual access of the element

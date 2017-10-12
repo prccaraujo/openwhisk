@@ -90,7 +90,7 @@ class Controller(
             (pathEndOrSingleSlash & get) {
                 complete(info)
             }
-        } ~ apiV1.routes ~ swagger.swaggerRoutes ~ internalInvokerHealth
+        } ~ apiV1.routes ~ swagger.swaggerRoutes// TODO: Remove: ~ internalInvokerHealth
     }
 
     // initialize datastores
@@ -116,7 +116,8 @@ class Controller(
      *
      * @return JSON of invoker health
      */
-    private val internalInvokerHealth = {
+    //TODO: Remove
+    /*private val internalInvokerHealth = {
         (path("invokers") & get) {
             complete {
                 loadBalancer.allInvokers.map(_.map {
@@ -124,7 +125,7 @@ class Controller(
                 }.toJson.asJsObject)
             }
         }
-    }
+    }*/
 
     // controller top level info
     private val info = Controller.info(whiskConfig, runtimes, List(apiV1.basepath()))
