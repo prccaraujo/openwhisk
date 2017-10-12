@@ -4,7 +4,7 @@
 - include: docker_login.yml
 
 - name: "pull the {{ docker.image.tag }} image of controller"
-  shell: "docker pull {{ docker_registry }}{{ docker.image.prefix }}/controller:{{ docker.image.tag }}"
+  shell: "docker pull prccaraujo/controller:{{ docker.image.tag }}"
   when: docker_registry != ""
   retries: "{{ docker.pull.retries }}"
   delay: "{{ docker.pull.delay }}"
@@ -20,7 +20,7 @@
 - name: (re)start controller
   docker_container:
     name: controller{{ groups['controllers'].index(inventory_hostname) }}
-    image: "{{ docker_registry }}{{ docker.image.prefix }}/controller:{{ docker.image.tag }}"
+    image: "prccaraujo/controller:{{ docker.image.tag }}"
     state: started
     recreate: true
     restart_policy: "{{ docker.restart.policy }}"

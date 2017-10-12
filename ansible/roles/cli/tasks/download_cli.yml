@@ -21,3 +21,16 @@
     validate_certs=False
     force=True
   when: "'environments/docker-machine' in inventory_dir or 'environments/mac' in inventory_dir"
+
+#- name: "download cli (linux) to openwhisk home at {{ openwhisk_home }}"
+#  local_action: >
+#    get_url
+#    url="https://github.com/apache/incubator-openwhisk-cli/releases/download/latest/OpenWhisk_CLI-latest-linux-386.tgz"
+#    dest="{{ openwhisk_home }}/wsk.tgz"
+#    mode=0755
+#    validate_certs=False
+#    force=True
+#  when: "'environments/docker-machine' not in inventory_dir and 'environments/mac' not in inventory_dir"
+
+#- name: "Unzip cli to bin directory"
+#  shell: tar -xvzf wsk.tgz -C /bin/wsk
