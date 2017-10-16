@@ -60,6 +60,7 @@
         -e ALL_NODES='{{ groups['dataflasks']|join(" ") }}'
         -e COMPUTES='1'
         -e COMP_ENV='EDGE'
+        -e CONTROLLER_PEER='0'
         -e COMPONENT_NAME='dataflask{{ groups['dataflasks'].index(inventory_hostname) }}'
         -e RUNTIMES_MANIFEST='{{ runtimesManifest | to_json }}'
         -e SELF_DOCKER_ENDPOINT='localhost'

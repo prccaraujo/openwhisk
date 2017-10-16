@@ -9,7 +9,7 @@ import main.scala.communication.Messages.{ComputingEnv, CyclonManagerStartMessag
 import main.scala.peers.{DFPeer, Peer}
 import main.scala.pss.CyclonManager
 import whisk.common.{AkkaLogging, Logging}
-import whisk.core.computing.OperationsManager
+import whisk.core.computing.{OperationControlHub, OperationsManager}
 import whisk.core.group.HybridGroupManager
 
 import scala.collection.mutable
@@ -32,11 +32,13 @@ class DataFlask {
                                 system: ActorSystem,
                                 cyclonManagerPathPrefix: String,
                                 computingEnv: ComputingEnv.EnvVal,
-                                computable: Boolean)(implicit logging: Logging): ActorRef = {
+                                computable: Boolean,
+                                controllerPeer: Boolean)(implicit logging: Logging): ActorRef = {
         val groupManager = new HybridGroupManager(localPeer, computingEnv)(logging)
         val operationsManager = new OperationsManager(localPeer, computingEnv, computable)(logging)
+        val operationHub = if(controllerPeer) new OperationControlHub(localPeer)(logging) else null
 
-        val remote: ActorRef = system.actorOf(Props(new CyclonManager(localPeer, initialView, groupManager, operationsManager)), name=s"${cyclonManagerPathPrefix}${localId}")
+        val remote: ActorRef = system.actorOf(Props(new CyclonManager(localPeer, initialView, groupManager, operationsManager, operationHub)), name=s"${cyclonManagerPathPrefix}${localId}")
 
         remote ! CyclonManagerStartMessage(remote)
 
@@ -60,8 +62,9 @@ object DataFlask {
         val flasksPort = sys.env("FLASKS_PORT")
         val confFolderPath = sys.env("CONFIG_PATH")
         val allNodes = sys.env("ALL_NODES")
-        val computingEnv = sys.env("COMP_ENV") //TODO: Implement environment logic in scripts
+        val computingEnv = sys.env("COMP_ENV")
         val computable = sys.env("COMPUTES") == "1"
+        val controllerPeer = sys.env("CONTROLLER_PEER") == "1"
 
         val flasks = new DataFlask()
         val localPeer = new DFPeer(localId, localIP, flasksPort.toInt)
@@ -69,6 +72,7 @@ object DataFlask {
         val system = flasks.initializeActorSystem(confFolderPath, systemPathPrefix, localId, actorSystemName)
 
         implicit val logging = new AkkaLogging(akka.event.Logging.getLogger(system, this))
+
 
         logging.info(this, s"Local ID $localId\n" +
           s"Local IP $localIP\n" +
@@ -88,6 +92,6 @@ object DataFlask {
 
         //Initiate Cyclon
         flasks.startLocalCyclonManager(localId, localPeer, initialView, system,
-            cyclonManagerPathPrefix, ComputingEnv.getFromString(computingEnv), computable)
+            cyclonManagerPathPrefix, ComputingEnv.getFromString(computingEnv), computable, controllerPeer)
     }
 }

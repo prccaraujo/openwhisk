@@ -58,10 +58,11 @@ class DataFlaskPool(
   //TODO: No entanto esta info não vai servir para nada possivelmente
   var status = IndexedSeq[InstanceId]()
   //Maps operation id to (number of required invokers, invokers that responded already)
-  var requestToInvokers = mutable.Map[Long, (Int, mutable.Seq[InstanceId])]()
+
+  var requestToInvokers = mutable.Set[Long]()
   var balancerRef: ActorRef = _
 
-  //TODO: At this moment this is implement as if every operation responds in order to the load balancer
+  //TODO: At this moment this is implemented as if every operation responds in order to the load balancer
   // (can bring problems, f.e. by returning invokers to the wrong request)
   //This means that the controller is also assigning the operations in order to the invokers.
   //TODO: Schedule a self message to respond to controller (não necessário porque pode simplesmente dar timeout do lado do controller)
@@ -71,16 +72,20 @@ class DataFlaskPool(
       logging.info(this, s"Received GetInvokers msg")
       balancerRef = sender()
 
+      logging.info(this, s"ADDED ${balancerRef.path} AS SENDER IN CONTROLLER")
+
       //Create request
-      val request = OperationRequestMessage(
+      val request = ControllerPeerInfoRequest(
         new ComputingOperation(
           msg.transid,
           msg.actionDataTag,
           msg.actionMinExpectedMem,
-          msg.actionEnv), this.context.self) //val request = PeerInfoRequest(2)
+          msg.actionEnv),
+        msg.numberOfInvokers,
+        this.context.self)
 
       //Open entry for the request
-      requestToInvokers += (msg.transid -> (msg.numberOfInvokers, mutable.Seq[InstanceId]()))
+      requestToInvokers += msg.transid
 
       localDataFlaskRef ! request
 
@@ -96,18 +101,11 @@ class DataFlaskPool(
       //}
     }
 
-      //TODO: Test
-    case msg: OperationResponseMessage =>
-      logging.info(this, s"RECEIVED OPERATION RESPONSE MSG FROM ${msg.peer.name}")
-      val currentState: (Int, mutable.Seq[InstanceId]) = requestToInvokers.get(msg.operationId).getOrElse(null)
-      if (currentState != null) {
-        if (currentState._1 <= currentState._2.size) {
-          balancerRef ! currentState._2.toIndexedSeq
-          requestToInvokers -= msg.operationId
-        } else {
-          logging.info(this, s"ADDED PEER ${msg.peer.name} FOR OPERATION ${msg.operationId}")
-          requestToInvokers(msg.operationId) = (requestToInvokers(msg.operationId)._1, requestToInvokers(msg.operationId)._2 :+ InstanceId(msg.peer.name.toInt))
-        }
+     //TODO: Test
+    case msg: ControllerPeerInfoResponse =>
+      logging.info(this, s"RECEIVED SET OF NODES TO SEND STUFF FOR OPERATION ${msg.operationId}")
+      if(requestToInvokers.contains(msg.operationId)) {
+        balancerRef ! msg.peerList.map(peer => InstanceId(peer.name.toInt)).toIndexedSeq
       }
 
     //TODO: Adaptar para dataflasks

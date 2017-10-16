@@ -4,8 +4,6 @@ import akka.actor.ActorRef
 import main.scala.peers.Peer
 import whisk.core.computing.ComputingOperation
 
-import scala.collection.mutable.ListBuffer
-
 object Messages {
 
   sealed trait Message
@@ -43,8 +41,8 @@ object Messages {
 
  /*Load Balancer messages*/
   case class LoadBalancerStartMessage(destination: ActorRef) extends Message with Serializable
-  case class PeerInfoRequest(infoSize: Int) extends Message with Serializable
-  case class PeerInfoResponse(listBuffer: ListBuffer[Peer]) extends Message with Serializable
+  case class ControllerPeerInfoRequest(operation: ComputingOperation, numberOfPeersNeeded: Int,  balancer: ActorRef) extends Message with Serializable
+  case class ControllerPeerInfoResponse(operationId: Long, peerList: Set[Peer]) extends Message with Serializable
 
   /*Operation messages*/
   case class OperationRequestMessage(operation: ComputingOperation, source: ActorRef) extends Message with Serializable

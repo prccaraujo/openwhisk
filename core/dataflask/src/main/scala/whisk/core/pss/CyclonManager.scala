@@ -6,19 +6,19 @@ import akka.actor._
 import main.scala.communication.Messages._
 import main.scala.peers.{DFPeer, Peer}
 import whisk.common.Logging
-import whisk.core.computing.{ComputingOperation, OperationsManager}
+import whisk.core.computing.{ComputingOperation, OperationControlHub, OperationsManager}
 import whisk.core.group.HybridGroupManager
 
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
-import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{Failure, Random, Success}
 
 class CyclonManager(private val _localPeer: Peer,
                     val initialView: mutable.HashMap[UUID, Peer],
                     val groupManager: HybridGroupManager = null,
-                    val operationsManager: OperationsManager = null)(implicit logging: Logging) extends Actor {
+                    val operationsManager: OperationsManager = null,
+                    val operationControlHub: OperationControlHub = null)(implicit logging: Logging) extends Actor {
 
   import main.scala.config.Configs.CyclonManagerConfig._
   import main.scala.config.Configs.SystemConfig._
@@ -178,18 +178,8 @@ class CyclonManager(private val _localPeer: Peer,
     sentPeerData = ListBuffer[Peer]()
   }
 
-  def retrievePeerInfo(target: ActorRef, infoSize: Int): Unit = {
-    val messagePeerInfo = getRandomGlobal(infoSize)
-    var response = ListBuffer[Peer]()
-
-    messagePeerInfo.foreach { peer =>
-      if(!peer.equals(localPeer)) response += peer
-    }
-
-    target ! PeerInfoResponse(response)
-  }
-
   def processOperationRequest(operation: ComputingOperation, source: ActorRef): Unit = {
+    logging.info(this, s"Received operation request from ${source.path}")
     if (!processedOperationRequests.contains(operation.id)) {
       processedOperationRequests += operation.id
       logging.info(this, "Processing operation request from controller")
@@ -205,20 +195,12 @@ class CyclonManager(private val _localPeer: Peer,
           //Respond to controller
           logging.info(this, s"RESPONDING TO CONTROLLER WITH OPERATION RESPONSE MESSAGE: ${source.path}")
           source ! OperationResponseMessage(operation.id, operationsManager.getCurrentFreeMemory(), localPeer)
-
-          getControllerRef.onComplete{
-            case Success(peerRef) =>
-              println(s"Success at finding controller ${peerRef.path.toString}")
-              //peerRef ! OperationResponseMessage(operation.id, operationsManager.getCurrentFreeMemory(), localPeer)
-            case Failure(f) =>
-              logging.error(this, s"Failure trying controller ${f.toString}")
-          }
         }
       }
     }
   }
 
-  def disseminateOperationRequest(operation: ComputingOperation, source: ActorRef): Unit = {
+  def disseminateOperationRequest(operation: ComputingOperation, source: ActorRef = context.self): Unit = {
       val toDisseminate: Set[Peer] = selectPeerInfoToDisseminate(null)
       val operationMessage = new OperationRequestMessage(operation, source)
 
@@ -227,19 +209,31 @@ class CyclonManager(private val _localPeer: Peer,
       }
   }
 
- //TODO: Refactor this if it works (pass as env vals or create a peer that can be passed)
-  def getControllerRef(): Future[ActorRef] = {
-      val actorSystemName = "controller-actor-system"
+  def processOperationResponse(response: OperationResponseMessage): Unit = {
+    logging.info(this, s"Received operation response from ${response.peer.name}")
 
-      val baseSystemAddress = s"akka.tcp://$actorSystemName"
-      val peerFindingTimeLimit = 10.seconds
+    val operation = response.operationId
 
-      val path = s"$baseSystemAddress@" +
-        "192.168.115.128:" +
-        "10001/user/" +
-        "$a"
+    if(operationControlHub != null) {
+      if(operationControlHub.operationIsOngoing(operation)) {
+        logging.info(this, s"OPERATION ${response.operationId} IS STILL ONGOING!")
 
-      return context.actorSelection(path).resolveOne(peerFindingTimeLimit)
+        operationControlHub.processOperationResponse(response)
+
+        if (operationControlHub.hasEnoughPeers(operation)) {
+          logging.info(this, s"OPERATION ${response.operationId} HAS ENOUGH PEEERS! RESPONDING to ${operationControlHub.getControllerRef(operation).path.toString}")
+          operationControlHub.getControllerRef(operation) ! ControllerPeerInfoResponse(operation, operationControlHub.getControllerResponse(operation))
+          operationControlHub.resolveOperation(operation)
+        }
+      }
+    }
+  }
+
+  def processControllerInfoRequest(request: ControllerPeerInfoRequest, ref: ActorRef): Unit = {
+    logging.info(this, s"RECEIVED CONTROLLER PEER INFO REQUEST MESSAGE FROM ${ref.path}")
+    if (operationControlHub != null) {
+      operationControlHub.processControllerInfoRequest(request, ref, this)
+    }
   }
 
   override def receive: Receive = {
@@ -252,19 +246,13 @@ class CyclonManager(private val _localPeer: Peer,
       processRequestMessage(msg)
     case msg: CyclonResponseMessage =>
       processResponseMessage(msg)
-/*
-    case msg: PeerInfoRequest =>
-      println(this, s"Received message from controller ${sender().path.toString}")
-      logging.info(this, s"Received message from controller ${sender().path.toString}")
-      //retrievePeerInfo(sender, msg.infoSize)
-      var response = new ListBuffer[Peer]
-      response += new DFPeer("0", "0.0.0.0", 50000, 0)
-      sender ! PeerInfoResponse(response)
-*/
+    case msg: ControllerPeerInfoRequest =>
+      processControllerInfoRequest(msg, msg.balancer)
     case msg: OperationRequestMessage =>
-      logging.info(this, s"Received operation request from ${msg.source.path}")
       processOperationRequest(msg.operation, msg.source)
-    case _ =>
-      logging.error(this, s"Received unrecognized message")
+    case msg: OperationResponseMessage =>
+      processOperationResponse(msg)
+    case msg =>
+      logging.error(this, s"Received unrecognized message from ${sender().path} ---- ${msg.toString}")
   }
 }
