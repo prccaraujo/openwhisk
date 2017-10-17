@@ -179,7 +179,6 @@ class CyclonManager(private val _localPeer: Peer,
   }
 
   def processOperationRequest(operation: ComputingOperation, source: ActorRef): Unit = {
-    logging.info(this, s"Received operation request from ${source.path}")
     if (!processedOperationRequests.contains(operation.id)) {
       processedOperationRequests += operation.id
       logging.info(this, "Processing operation request from controller")
@@ -230,7 +229,6 @@ class CyclonManager(private val _localPeer: Peer,
   }
 
   def processControllerInfoRequest(request: ControllerPeerInfoRequest, ref: ActorRef): Unit = {
-    logging.info(this, s"RECEIVED CONTROLLER PEER INFO REQUEST MESSAGE FROM ${ref.path}")
     if (operationControlHub != null) {
       operationControlHub.processControllerInfoRequest(request, ref, this)
     }

@@ -13,7 +13,6 @@ class OperationControlHub(val localPeer: Peer)(implicit logging: Logging) {
   var requestToPeers = mutable.Map[Long, (Int, mutable.Seq[Peer])]()
   var requestToSource = mutable.Map[Long, ActorRef]()
 
-  //TODO: Test
   def processControllerInfoRequest(request: ControllerPeerInfoRequest, sender: ActorRef, pss: CyclonManager): Unit = {
     val operation = request.operation
 
@@ -21,19 +20,15 @@ class OperationControlHub(val localPeer: Peer)(implicit logging: Logging) {
     if (entry == null) {
       requestToPeers += (operation.id -> (request.numberOfPeersNeeded, mutable.Seq[Peer]()))
 
-      logging.info(this, s"ADDED REQUEST FOR PROCESSING FROM SENDER ${sender.path.toString}")
-
       pss.disseminateOperationRequest(operation)
     }
 
     requestToSource += (operation.id -> sender)
   }
 
-  //TODO: Test
   def processOperationResponse(message: OperationResponseMessage): Unit = {
     val currentState = requestToPeers.get(message.operationId).getOrElse(null)
       if (currentState != null) {
-        logging.info(this, s"ADDED PEER ${message.peer.name} FOR OPERATION ${message.operationId}")
         requestToPeers(message.operationId) = (requestToPeers(message.operationId)._1, requestToPeers(message.operationId)._2 :+ message.peer)
       }
   }

@@ -5,10 +5,8 @@
 ; used for local actions only
 ansible ansible_connection=local
 [registry]
-; 127.0.0.1
 192.168.116.200
 [edge]
-; 127.0.0.1
 192.168.116.200
 [apigateway:children]
 edge
@@ -25,8 +23,6 @@ edge
 192.168.116.162
 192.168.116.161
 [dataflasks:children]
-; controllers
 invokers
 [db]
-; 127.0.0.1
 192.168.116.200

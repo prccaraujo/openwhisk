@@ -2,7 +2,7 @@ package whisk.core.loadBalancer
 
 import scala.collection.mutable
 import scala.concurrent.duration._
-import akka.actor.{Actor, ActorRef, ActorRefFactory, Props}
+import akka.actor.{Actor, ActorRef, Props}
 import akka.util.Timeout
 import main.scala.communication.Messages._
 import main.scala.peers.{DFPeer, Peer}
@@ -26,20 +26,18 @@ case class ActivationRequest(msg: ActivationMessage, invoker: InstanceId)
 case class InvocationFinishedMessage(invokerInstance: InstanceId, successful: Boolean)
 
 // Data stored in the Invoker
-final case class InvokerInfo(buffer: RingBuffer[Boolean])
+final case class InvokerInfo(buffer: RingBuffer[Boolean]) //TODO: Remove?
 
 //Comunicates with local DataFlask container and asks for information about available invokers
-class DataFlaskPool(
-                   childFactory: (ActorRefFactory, InstanceId) => ActorRef,
+class DataFlaskPool(//childFactory: (ActorRefFactory, InstanceId) => ActorRef,
                    pingConsumer: MessageConsumer) extends Actor {
 
-  //implicit val transid = TransactionId.invokerHealth
   val timeoutTime = 15.seconds
   val dataFlasksBaseSystemAddress = "akka.tcp://ActorFlasks"
   val localDataFlaskIp = sys.env("DATAFLASK_IP")
   val localDataFlaskPort = sys.env("DATAFLASK_PORT")
   val localDataFlaskPrefix = "cyclon"
-  val localDataFlaskName= "999"
+  val localDataFlaskName = sys.env("DATAFLASK_ID")
 
   implicit val logging = new AkkaLogging(context.system.log)
   implicit val timeout = Timeout(timeoutTime)
@@ -50,29 +48,16 @@ class DataFlaskPool(
   //Resolve local dataflasks actor reference
   resolveDataFlaskActorRef(dataFlasksBaseSystemAddress, localDataFlaskPeer)
 
-  // State of the actor. It's important not to close over these
-  // references directly, so they don't escape the Actor.
-  val instanceToRef = mutable.Map[InstanceId, ActorRef]()
-  val refToInstance = mutable.Map[ActorRef, InstanceId]()
-  //TODO: No futuro pode-se guardar aqui a info sobre cada instance id, da mesma forma que originalmente se guardava o state.
-  //TODO: No entanto esta info não vai servir para nada possivelmente
-  var status = IndexedSeq[InstanceId]()
-  //Maps operation id to (number of required invokers, invokers that responded already)
+  val instanceToRef = mutable.Map[InstanceId, ActorRef]() //TODO: REMOVE?
+  val refToInstance = mutable.Map[ActorRef, InstanceId]() //TODO: REMOVE?
+  val operationToController = mutable.Map[Long, ActorRef]() //Maps requested operation ID to the ref of the controller that did it
 
-  var requestToInvokers = mutable.Set[Long]()
-  var balancerRef: ActorRef = _
-
-  //TODO: At this moment this is implemented as if every operation responds in order to the load balancer
-  // (can bring problems, f.e. by returning invokers to the wrong request)
-  //This means that the controller is also assigning the operations in order to the invokers.
-  //TODO: Schedule a self message to respond to controller (não necessário porque pode simplesmente dar timeout do lado do controller)
+  //TODO: At this moment this is implemented as if every operation responds in order to the load balancer (can bring problems, f.e. by returning invokers to the wrong request)
+  //TODO: This means that the controller is also assigning the operations in order to the invokers.
   def receive = {
 
     case msg: GetInvokers => {
-      logging.info(this, s"Received GetInvokers msg")
-      balancerRef = sender()
-
-      logging.info(this, s"ADDED ${balancerRef.path} AS SENDER IN CONTROLLER")
+      operationToController += (msg.transid -> sender())
 
       //Create request
       val request = ControllerPeerInfoRequest(
@@ -84,28 +69,16 @@ class DataFlaskPool(
         msg.numberOfInvokers,
         this.context.self)
 
-      //Open entry for the request
-      requestToInvokers += msg.transid
-
       localDataFlaskRef ! request
-
-      //status = status :+ InstanceId(0)
-      //sender() ! status
-      //val peerList = Await.result(response, 10.seconds).asInstanceOf[PeerInfoResponse]
-      //sender() ! peerList.listBuffer.map(peer => InstanceId(peer.name.toInt)).toIndexedSeq
-      //response.onComplete {
-        //case Success(message: PeerInfoResponse) => balancer ! message.listBuffer.map(peer => InstanceId(peer.name.toInt)).toIndexedSeq
-      //  case Success(message: OperationResponseMessage) => balancer ! message.listBuffer.map(peer => InstanceId(peer.name.toInt)).toIndexedSeq
-      //  case Success(message) => balancer ! status
-      //  case Failure(f) => balancer ! status
-      //}
     }
 
-     //TODO: Test
     case msg: ControllerPeerInfoResponse =>
       logging.info(this, s"RECEIVED SET OF NODES TO SEND STUFF FOR OPERATION ${msg.operationId}")
-      if(requestToInvokers.contains(msg.operationId)) {
-        balancerRef ! msg.peerList.map(peer => InstanceId(peer.name.toInt)).toIndexedSeq
+      val controller = operationToController.getOrElse(msg.operationId, null)
+
+      if(controller != null){
+        controller ! msg.peerList.map(peer => InstanceId(peer.name.toInt)).toIndexedSeq
+        operationToController.remove(msg.operationId)
       }
 
     //TODO: Adaptar para dataflasks
@@ -118,7 +91,6 @@ class DataFlaskPool(
   def resolveDataFlaskActorRef(baseSystemAddress: String, peer: DFPeer): Unit = {
     getPeerActorRef(baseSystemAddress, peer, localDataFlaskPrefix).onComplete{
       case Success(peerRef) =>
-        logging.info(this, s"Success at finding peer ${peer.name}")
         localDataFlaskRef = peerRef
       case Failure(f) =>
         logging.info(this, s"Failure trying to find peer ${peer.name} - ${f.toString}")
@@ -143,9 +115,10 @@ class DataFlaskPool(
 //TODO: Penso que messageConsumer é inutil
 object DataFlaskPool {
   def props(
-             f: (ActorRefFactory, InstanceId) => ActorRef,
+             //f: (ActorRefFactory, InstanceId) => ActorRef,
              pc: MessageConsumer) = {
-    Props(new DataFlaskPool(f, pc))
+    Props(new DataFlaskPool(//f,
+      pc))
   }
 }
 
@@ -153,7 +126,7 @@ object DataFlaskPool {
   * Actor representing an Invoker
   */
 //TODO: Probably is not worth to store this info
-class InvokerActor(invokerInstance: InstanceId, controllerInstance: InstanceId) extends Actor {
+/*class InvokerActor(invokerInstance: InstanceId, controllerInstance: InstanceId) extends Actor {
   //implicit val transid = TransactionId.invokerHealth
   implicit val logging = new AkkaLogging(context.system.log)
   val name = s"invoker${invokerInstance.toInt}"
@@ -176,3 +149,4 @@ object InvokerActor {
 
   val timerName = "testActionTimer"
 }
+*/

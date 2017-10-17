@@ -26,7 +26,7 @@ import scala.concurrent.duration.DurationInt
 import scala.util.Failure
 import scala.util.Success
 import org.apache.kafka.clients.producer.RecordMetadata
-import akka.actor.{ActorRefFactory, ActorSystem, Props}
+import akka.actor.{ActorSystem, Props}
 import akka.pattern.ask
 import akka.util.Timeout
 import main.scala.communication.Messages.ComputingEnv
@@ -184,10 +184,10 @@ class LoadBalancerService(
     val maxPingsPerPoll = 128
     val pingConsumer = messasgingProvider.getConsumer(config, s"health${instance.toInt}", "health", maxPeek = maxPingsPerPoll)
     //TODO: Remover invoker factory
-    val invokerFactory = (f: ActorRefFactory, invokerInstance: InstanceId) => f.actorOf(InvokerActor.props(invokerInstance, instance))
+    //val invokerFactory = (f: ActorRefFactory, invokerInstance: InstanceId) => f.actorOf(InvokerActor.props(invokerInstance, instance))
 
     actorSystem.actorOf(DataFlaskPool.props(
-      invokerFactory,
+      //invokerFactory,
       pingConsumer))
   }
 

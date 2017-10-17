@@ -57,7 +57,7 @@
         -e LOCAL_IP='{{ inventory_hostname }}'
         -e FLASKS_PORT='{{ dataflask.port }}'
         -e CONFIG_PATH='/'
-        -e ALL_NODES='{{ groups['dataflasks']|join(" ") }}'
+        -e ALL_NODES='{{ groups['controllers']|join(" ") }}'
         -e COMPUTES='1'
         -e COMP_ENV='EDGE'
         -e CONTROLLER_PEER='0'
@@ -84,7 +84,7 @@
     msg: "LOCAL_ID - {{ groups['dataflasks'].index(inventory_hostname) }}
       LOCAL_IP - {{ inventory_hostname }}
       FLASKS_PORT - {{ dataflask.port }}
-      ALL_NODES - {{ groups['dataflasks']|join(\" \") }}"
+      ALL_NODES - {{ groups['controllers']|join(\" \") }}"
 
 - name: wait until Dataflask is up and running
   wait_for:

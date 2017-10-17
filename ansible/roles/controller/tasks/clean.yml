@@ -1,4 +1,51 @@
 ---
+# Remove dataflask container
+
+- name: remove dataflask
+  docker_container:
+    name: "dataflaskController"
+    image: "prccaraujo/dataflask:{{ docker.image.tag }}"
+    state: absent
+    stop_timeout: 60
+    timeout: 120
+  ignore_errors: True
+
+# In case the dataflask could not clean up completely in time.
+- name: pause/resume at runc-level to restore docker consistency
+  shell: |
+        DOCKER_PAUSED=$(docker ps --filter status=paused --filter name=dataflask -q --no-trunc)
+        for C in $DOCKER_PAUSED; do docker-runc pause $C; done
+        DOCKER_RUNNING=$(docker ps --filter status=running --filter name=dataflask -q --no-trunc)
+        for C2 in $DOCKER_RUNNING; do docker-runc resume $C2; done
+        TOTAL=$(($(echo $DOCKER_PAUSED | wc -w)+$(echo $DOCKER_RUNNING | wc -w)))
+        echo "Handled $TOTAL remaining actions."
+  register: runc_output
+  ignore_errors: True
+  become: True
+
+- debug: msg="{{ runc_output.stdout }}"
+
+- name: unpause remaining actions
+  shell: "docker unpause $(docker ps -aq --filter status=paused --filter name=dataflask)"
+  failed_when: False
+
+- name: remove remaining actions
+  shell: "docker rm -f $(docker ps -aq --filter name=dataflask)"
+  failed_when: False
+
+- name: remove dataflask log directory
+  file:
+    path: "{{ whisk_logs_dir }}/dataflaskController"
+    state: absent
+  become: true
+
+- name: remove dataflask images
+  docker_image:
+     state: absent
+     name: prccaraujo/dataflask
+     tag: latest
+     force: yes
+
 # Remove controller containers.
 
 - name: remove controller

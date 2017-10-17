@@ -2,31 +2,31 @@
 
 # Download the cli to openwhisk_home
 
-- name: "download cli (linux) to openwhisk home at {{ openwhisk_home }}"
-  local_action: >
-    get_url
-    url="https://{{ groups['edge'] | first }}/cli/go/download/linux/amd64/wsk"
-    dest="{{ openwhisk_home }}/bin/wsk"
-    mode=0755
-    validate_certs=False
-    force=True
-  when: "'environments/docker-machine' not in inventory_dir and 'environments/mac' not in inventory_dir"
+# - name: "download cli (linux) to openwhisk home at {{ openwhisk_home }}"
+#  local_action: >
+#    get_url
+#    url="https://{{ groups['edge'] | first }}/cli/go/download/linux/amd64/wsk"
+#    dest="{{ openwhisk_home }}/bin/wsk"
+#    mode=0755
+#    validate_certs=False
+#    force=True
+#  when: "'environments/docker-machine' not in inventory_dir and 'environments/mac' not in inventory_dir"
 
-- name: "download cli (docker-machine) to openwhisk home at {{ openwhisk_home }}"
-  local_action: >
-    get_url
-    url="https://{{ groups['edge'] | first }}/cli/go/download/mac/amd64/wsk"
-    dest="{{ openwhisk_home }}/bin/wsk"
-    mode=0755
-    validate_certs=False
-    force=True
-  when: "'environments/docker-machine' in inventory_dir or 'environments/mac' in inventory_dir"
+#- name: "download cli (docker-machine) to openwhisk home at {{ openwhisk_home }}"
+#  local_action: >
+#    get_url
+#    url="https://{{ groups['edge'] | first }}/cli/go/download/mac/amd64/wsk"
+#    dest="{{ openwhisk_home }}/bin/wsk"
+#    mode=0755
+#    validate_certs=False
+#    force=True
+#  when: "'environments/docker-machine' in inventory_dir or 'environments/mac' in inventory_dir"
 
 #- name: "download cli (linux) to openwhisk home at {{ openwhisk_home }}"
 #  local_action: >
 #    get_url
 #    url="https://github.com/apache/incubator-openwhisk-cli/releases/download/latest/OpenWhisk_CLI-latest-linux-386.tgz"
-#    dest="{{ openwhisk_home }}/wsk.tgz"
+#    dest="wsk.tgz"
 #    mode=0755
 #    validate_certs=False
 #    force=True

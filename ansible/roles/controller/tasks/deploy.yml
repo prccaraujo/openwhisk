@@ -3,6 +3,93 @@
 
 - include: docker_login.yml
 
+################################ LOAD DATAFLASKS ####################################
+
+- name: "pull dataflask image with tag {{docker.image.tag}}"
+  shell: "docker pull prccaraujo/dataflask:{{docker.image.tag}}"
+  with_items:
+    - 'prccaraujo/dataflask'
+  when: docker_registry != ""
+  retries: "{{ docker.pull.retries }}"
+  delay: "{{ docker.pull.delay }}"
+
+- name: determine docker root dir
+  uri:  url="http://{{ inventory_hostname }}:{{ docker.port }}/info" return_content=yes
+  register: dockerInfo
+
+- name: ensure dataflask log directory is created with permissions
+  file:
+    path: "{{ whisk_logs_dir }}/dataflaskController }}"
+    state: directory
+    mode: 0777
+  become: true
+
+- name: define options when deploying dataflask on Ubuntu
+  set_fact:
+    linuxOptions: "-v /usr/lib/x86_64-linux-gnu/libapparmor.so.1:/usr/lib/x86_64-linux-gnu/libapparmor.so.1"
+  when: whisk_version_name != "mac"
+
+- name: get running dataflask information
+  uri: url="http://{{ inventory_hostname }}:{{ docker.port }}/containers/json?filters={{ '{"name":[ "dataflask" ]}' | urlencode }}" return_content=yes
+  register: dataflaskInfo
+
+- name: determine if more than one dataflask is running
+  fail: msg="more than one dataflask is running"
+  when: dataflaskInfo.json|length > 1
+
+- name: start dataflask using docker cli
+  shell: >
+        docker run -d
+        --userns=host
+        --pid=host
+        --privileged
+        {{ linuxOptions | default('') }}
+        --name dataflaskController
+        --hostname dataflaskController
+        --restart {{ docker.restart.policy }}
+        -e JAVA_OPTS='-Xmx{{ dataflask.heap }}'
+        -e DATAFLASK_OPTS='{{ dataflask.arguments }}'
+        -e LOCAL_IP='{{ inventory_hostname }}'
+        -e LOCAL_ID='999'
+        -e FLASKS_PORT='{{ dataflask.port }}'
+        -e CONFIG_PATH='/'
+        -e ALL_NODES='{{ groups['dataflasks']|join(" ") }}'
+        -e COMPUTES='0'
+        -e COMP_ENV='EDGE'
+        -e CONTROLLER_PEER='1'
+        -e COMPONENT_NAME='dataflaskController'
+        -e RUNTIMES_MANIFEST='{{ runtimesManifest | to_json }}'
+        -e SELF_DOCKER_ENDPOINT='localhost'
+        -e DOCKER_REGISTRY='{{ docker_registry }}'
+        -e DOCKER_IMAGE_PREFIX='{{ docker.image.prefix }}'
+        -e DOCKER_IMAGE_TAG='{{ docker.image.tag }}'
+        -e WHISK_LOGS_DIR='{{ whisk_logs_dir }}'
+        -v /sys/fs/cgroup:/sys/fs/cgroup
+        -v /run/runc:/run/runc
+        -v {{ whisk_logs_dir }}/dataflaskController:/logs
+        -v {{ dockerInfo["json"]["DockerRootDir"] }}/containers/:/containers
+        -v {{ docker_sock | default('/var/run/docker.sock') }}:/var/run/docker.sock
+        -p {{ dataflask.port }}:{{ dataflask.port }}
+        prccaraujo/dataflask:{{ docker.image.tag }}
+        /bin/sh -c "./createConf.sh; ./dataflask/bin/dataflask"
+  when: dataflaskInfo.json|length == 0
+
+- debug:
+    msg: "LOCAL_ID - CONTROLLER
+      LOCAL_IP - {{ inventory_hostname }}
+      FLASKS_PORT - {{ dataflask.port }}
+      ALL_NODES - {{ groups['dataflasks']|join(\" \") }}"
+
+- name: wait until Dataflask is up and running
+  wait_for:
+    host: "{{ inventory_hostname }}"
+    port: "{{ dataflask.port }}"
+    state: started
+    delay: 5
+    timeout: 10
+
+########################## LOAD CONTROLLER ##############################
+
 - name: "pull the {{ docker.image.tag }} image of controller"
   shell: "docker pull prccaraujo/controller:{{ docker.image.tag }}"
   when: docker_registry != ""
@@ -16,7 +103,6 @@
     mode: 0777
   become: true
 
-# TODO: Change controller_ip env var so it reads from hosts file (controller{{ groups['controllers'].index(inventory_hostname) }})
 - name: (re)start controller
   docker_container:
     name: controller{{ groups['controllers'].index(inventory_hostname) }}
@@ -33,13 +119,14 @@
       "COMPONENT_NAME": "controller{{ groups['controllers'].index(inventory_hostname) }}"
       "PORT": 8080
 
-      "CONTROLLER_IP": "192.168.115.128"
+      "CONTROLLER_IP": "{{ inventory_hostname }}"
       "CONTROLLER_PORT": 8080
       "CONTROLLER_BIND_IP": "0.0.0.0"
       "CONTROLLER_BIND_PORT": "{{ controller.basePort }}"
       "CONFIG_PATH": "/"
-      "DATAFLASK_IP": "192.168.115.128"
-      "DATAFLASK_PORT": 50000
+      "DATAFLASK_IP": "{{ inventory_hostname }}"
+      "DATAFLASK_PORT": "{{ dataflask.port }}"
+      "DATAFLASK_ID": 999
 
       "WHISK_VERSION_NAME": "{{ whisk_version_name }}"
       "WHISK_VERSION_DATE": "{{ whisk.version.date }}"

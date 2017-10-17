@@ -73,7 +73,6 @@ object DataFlask {
 
         implicit val logging = new AkkaLogging(akka.event.Logging.getLogger(system, this))
 
-
         logging.info(this, s"Local ID $localId\n" +
           s"Local IP $localIP\n" +
           s"PORT $flasksPort" +
@@ -81,9 +80,6 @@ object DataFlask {
           s"\nALL NODES - $allNodes")
 
         var initialView: mutable.HashMap[UUID, Peer] = mutable.HashMap()
-
-        //TODO: Remove this logic and implement in a way that node only knows controller (future)
-        //TODO: Controller doesn't need to know the nodes at the beginning, he just has to wait for nodes to connect to him
         for((node, index) <- allNodes.split(" ").zipWithIndex) {
             val newPeer = new DFPeer(index.toString, node, flasksPort.toInt,  _age = 0, _position = (index+1)/allNodes.split(" ").length)
             if(!newPeer.uuid.equals(localPeer.uuid))
