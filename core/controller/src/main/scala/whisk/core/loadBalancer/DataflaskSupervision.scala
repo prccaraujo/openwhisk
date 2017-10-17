@@ -7,7 +7,6 @@ import akka.util.Timeout
 import main.scala.communication.Messages._
 import main.scala.peers.{DFPeer, Peer}
 import whisk.common.AkkaLogging
-import whisk.common.RingBuffer
 import whisk.core.computing.ComputingOperation
 import whisk.core.connector._
 import whisk.core.entity._
@@ -25,12 +24,8 @@ case class GetInvokers(numberOfInvokers: Int,
 case class ActivationRequest(msg: ActivationMessage, invoker: InstanceId)
 case class InvocationFinishedMessage(invokerInstance: InstanceId, successful: Boolean)
 
-// Data stored in the Invoker
-final case class InvokerInfo(buffer: RingBuffer[Boolean]) //TODO: Remove?
-
 //Comunicates with local DataFlask container and asks for information about available invokers
-class DataFlaskPool(//childFactory: (ActorRefFactory, InstanceId) => ActorRef,
-                   pingConsumer: MessageConsumer) extends Actor {
+class DataFlaskPool(pingConsumer: MessageConsumer) extends Actor {
 
   val timeoutTime = 15.seconds
   val dataFlasksBaseSystemAddress = "akka.tcp://ActorFlasks"
@@ -114,39 +109,7 @@ class DataFlaskPool(//childFactory: (ActorRefFactory, InstanceId) => ActorRef,
 
 //TODO: Penso que messageConsumer é inutil
 object DataFlaskPool {
-  def props(
-             //f: (ActorRefFactory, InstanceId) => ActorRef,
-             pc: MessageConsumer) = {
-    Props(new DataFlaskPool(//f,
-      pc))
+  def props(pc: MessageConsumer) = {
+    Props(new DataFlaskPool(pc))
   }
 }
-
-/**
-  * Actor representing an Invoker
-  */
-//TODO: Probably is not worth to store this info
-/*class InvokerActor(invokerInstance: InstanceId, controllerInstance: InstanceId) extends Actor {
-  //implicit val transid = TransactionId.invokerHealth
-  implicit val logging = new AkkaLogging(context.system.log)
-  val name = s"invoker${invokerInstance.toInt}"
-
-  val healthyTimeout = 10.seconds
-
-  // This is done at this point to not intermingle with the state-machine
-  // especially their timeouts.
-  def customReceive: Receive = {
-    case _ => // The response of putting testactions to the MessageProducer. We don't have to do anything with them.
-  }
-  override def receive = customReceive
-}
-
-object InvokerActor {
-  def props(invokerInstance: InstanceId, controllerInstance: InstanceId) = Props(new InvokerActor(invokerInstance, controllerInstance))
-
-  val bufferSize = 10
-  val bufferErrorTolerance = 3
-
-  val timerName = "testActionTimer"
-}
-*/

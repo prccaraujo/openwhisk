@@ -96,8 +96,6 @@ class LoadBalancerService(
 
   override def totalActiveActivations = loadBalancerData.totalActivationCount
 
-  // logging.info(this, s"Chose Invoker named ${invokerName} with activationId ${msg.activationId} for user ${msg.user.uuid.toString}")(transid)
-  // [LoadBalancerService] Chose Invoker named InstanceId(0) with activationId e5e8ed98932e46a3b9306c8ae6db964 for user 23bc46b1-71f6-4ed5-8c54-816aa4f8c502
   //TODO: Mais tarde, os metadados para escolher invoker vão estar incluidos na ActivationMessage
   override def publish(action: ExecutableWhiskAction, msg: ActivationMessage)(
     implicit transid: TransactionId): Future[Future[Either[ActivationId, WhiskActivation]]] = {
@@ -183,12 +181,8 @@ class LoadBalancerService(
   private val dataflaskPool = {
     val maxPingsPerPoll = 128
     val pingConsumer = messasgingProvider.getConsumer(config, s"health${instance.toInt}", "health", maxPeek = maxPingsPerPoll)
-    //TODO: Remover invoker factory
-    //val invokerFactory = (f: ActorRefFactory, invokerInstance: InstanceId) => f.actorOf(InvokerActor.props(invokerInstance, instance))
 
-    actorSystem.actorOf(DataFlaskPool.props(
-      //invokerFactory,
-      pingConsumer))
+    actorSystem.actorOf(DataFlaskPool.props(pingConsumer))
   }
 
   /**
