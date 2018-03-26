@@ -15,7 +15,7 @@ chmod +x /usr/bin/docker && \
 chmod +x /usr/bin/docker-runc
 
 # Make port 50000 available
-EXPOSE 50000-59999
+EXPOSE 50000
 
 # Copy app jars
 COPY src/main/resources/createConf.sh ./

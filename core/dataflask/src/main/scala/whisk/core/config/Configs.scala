@@ -41,6 +41,7 @@ object Configs {
     val actionManagerPathPrefix = "action"
     val systemPathPrefix = "app"
     val actorSystemName = "ActorFlasks"
+    val controllerId = "99999"
 
     val system = akka.actor.ActorSystem(actorSystemName)
     val baseSystemAddress = s"akka.tcp://$actorSystemName"

@@ -6,6 +6,7 @@ import java.util.UUID
 import akka.actor.{ActorSystem, Props, _}
 import com.typesafe.config._
 import main.scala.communication.Messages.{ComputingEnv, CyclonManagerStartMessage}
+import main.scala.config.Configs.SystemConfig
 import main.scala.peers.{DFPeer, Peer}
 import main.scala.pss.CyclonManager
 import whisk.common.{AkkaLogging, Logging}
@@ -48,7 +49,6 @@ class DataFlask {
 
 object DataFlask {
 
-    //TODO: Refactor to config file
     val cyclonManagerPathPrefix = "cyclon"
     val actionManagerPathPrefix = "action"
     val systemPathPrefix = "app"
@@ -79,10 +79,18 @@ object DataFlask {
           s"\nCONFIG PATH $confFolderPath" +
           s"\nALL NODES - $allNodes")
 
+        //TODO: Remedy this
         var initialView: mutable.HashMap[UUID, Peer] = mutable.HashMap()
         for((node, index) <- allNodes.split(" ").zipWithIndex) {
-            val newPeer = new DFPeer(index.toString, node, flasksPort.toInt,  _age = 0, _position = (index+1)/allNodes.split(" ").length)
+            val newPeer = new DFPeer(
+                if (controllerPeer) SystemConfig.controllerId else index.toString,
+                node,
+                flasksPort.toInt,
+                _age = 0,
+                _position = (index+1)/allNodes.split(" ").length
+            )
             if(!newPeer.uuid.equals(localPeer.uuid))
+                logging.info(this, s"ADDED PEER ${newPeer.id} WITH IP ${newPeer.ip} TO LOCAL VIEW")
                 initialView += (newPeer.uuid -> newPeer)
         }
 
