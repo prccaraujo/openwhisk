@@ -228,13 +228,19 @@ trait WhiskActionsApi
                                 onComplete(invokeAction(user, actionWithMergedParams, payload, waitForResponse, cause = None)) {
                                     case Success(Left(activationId)) =>
                                         // non-blocking invoke or blocking invoke which got queued instead
+                                        logging.info(this, "UNSUCESSFULLY COMPLETED ACTIVATION AT ACTIONS.SCALA")
                                         complete(Accepted, activationId.toJsObject)
                                     case Success(Right(activation)) =>
+                                        logging.info(this, "SUCESSFULLY COMPLETED ACTIVATION AT ACTIONS.SCALA")
+                                        if (activation == null)
+                                            logging.info(this, s"ACTIVATION IS NULL AT RIGHT(ACTIVATION)")
                                         val response = if (result) activation.resultAsJson else activation.toExtendedJson
-
                                         if (activation.response.isSuccess) {
+                                            logging.info(this, "RESPONSE IS A SUCCESS")
+                                            logging.info(this, s"RESPONSE IS ${response.toString}")
                                             complete(OK, response)
                                         } else if (activation.response.isApplicationError) {
+                                            logging.info(this, "RESPONSE IS APPLICATION ERROR!")
                                             // actions that result is ApplicationError status are considered a 'success'
                                             // and will have an 'error' property in the result - the HTTP status is OK
                                             // and clients must check the response status if it exists
@@ -243,8 +249,10 @@ trait WhiskActionsApi
                                             // PRESERVING OLD BEHAVIOR and will address defect in separate change
                                             complete(BadGateway, response)
                                         } else if (activation.response.isContainerError) {
+                                            logging.info(this, "RESPONSE IS CONTAINER ERROR!")
                                             complete(BadGateway, response)
                                         } else {
+                                            logging.info(this, "RESPONSE IS OTHER KIND OF ERROR!")
                                             complete(InternalServerError, response)
                                         }
                                     case Failure(t: RecordTooLargeException) =>
@@ -254,6 +262,7 @@ trait WhiskActionsApi
                                         logging.info(this, s"[POST] action rejected with code $code: $message")
                                         terminate(code, message)
                                     case Failure(t: Throwable) =>
+                                        logging.info(this, s"UNSUCESSFULLY COMPLETED ACTIVATION AT ACTIONS.SCALA WITH ERROR ${t.getCause.toString}")
                                         logging.error(this, s"[POST] action activation failed: ${t.getMessage}")
                                         terminate(InternalServerError)
                                 }

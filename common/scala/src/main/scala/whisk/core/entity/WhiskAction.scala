@@ -112,7 +112,7 @@ abstract class WhiskActionLike(override val name: EntityName) extends WhiskEntit
  * @param limits the limits to impose on the action
  * @param version the semantic version
  * @param publish true to share the action or false otherwise
- * @param annotation the set of annotations to attribute to the action
+ * @param annotations the set of annotations to attribute to the action
  * @throws IllegalArgumentException if any argument is undefined
  */
 @throws[IllegalArgumentException]
@@ -171,7 +171,7 @@ case class WhiskAction(
  * @param limits the limits to impose on the action
  * @param version the semantic version
  * @param publish true to share the action or false otherwise
- * @param annotation the set of annotations to attribute to the action
+ * @param annotations the set of annotations to attribute to the action
  * @throws IllegalArgumentException if any argument is undefined
  */
 @throws[IllegalArgumentException]

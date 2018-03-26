@@ -23,7 +23,6 @@ import scala.concurrent.Future
 import scala.concurrent.Promise
 import scala.concurrent.duration._
 import scala.util.Failure
-
 import akka.actor.Actor
 import akka.actor.ActorRef
 import akka.actor.ActorSystem
@@ -55,9 +54,9 @@ protected[actions] trait PrimitiveActions {
     protected implicit val logging: Logging
 
     /**
-     *  The index of the active ack topic, this controller is listening for.
-     *  Typically this is also the instance number of the controller
-     */
+      *  The index of the active ack topic, this controller is listening for.
+      *  Typically this is also the instance number of the controller
+      */
     protected val activeAckTopicIndex: InstanceId
 
     /** Database service to CRUD actions. */
@@ -67,37 +66,37 @@ protected[actions] trait PrimitiveActions {
     protected val activationStore: ActivationStore
 
     /**
-     * Posts request to the loadbalancer. If the loadbalancer accepts the requests with an activation id,
-     * then wait for the result of the activation if necessary.
-     *
-     * NOTE:
-     * For activations of actions, cause is populated only for actions that were invoked as a result of a sequence activation.
-     * For actions that are enclosed in a sequence and are activated as a result of the sequence activation, the cause
-     * contains the activation id of the immediately enclosing sequence.
-     * e.g.,: s -> a, x, c    and   x -> c  (x and s are sequences, a, b, c atomic actions)
-     * cause for a, x, c is the activation id of s
-     * cause for c is the activation id of x
-     * cause for s is not defined
-     *
-     * @param user the identity invoking the action
-     * @param action the action to invoke
-     * @param payload the dynamic arguments for the activation
-     * @param waitForResponse if not empty, wait upto specified duration for a response (this is used for blocking activations)
-     * @param cause the activation id that is responsible for this invoke/activation
-     * @param transid a transaction id for logging
-     * @return a promise that completes with one of the following successful cases:
-     *            Right(WhiskActivation) if waiting for a response and response is ready within allowed duration,
-     *            Left(ActivationId) if not waiting for a response, or allowed duration has elapsed without a result ready
-     *         or these custom failures:
-     *            RequestEntityTooLarge if the message is too large to to post to the message bus
-     */
+      * Posts request to the loadbalancer. If the loadbalancer accepts the requests with an activation id,
+      * then wait for the result of the activation if necessary.
+      *
+      * NOTE:
+      * For activations of actions, cause is populated only for actions that were invoked as a result of a sequence activation.
+      * For actions that are enclosed in a sequence and are activated as a result of the sequence activation, the cause
+      * contains the activation id of the immediately enclosing sequence.
+      * e.g.,: s -> a, x, c    and   x -> c  (x and s are sequences, a, b, c atomic actions)
+      * cause for a, x, c is the activation id of s
+      * cause for c is the activation id of x
+      * cause for s is not defined
+      *
+      * @param user the identity invoking the action
+      * @param action the action to invoke
+      * @param payload the dynamic arguments for the activation
+      * @param waitForResponse if not empty, wait upto specified duration for a response (this is used for blocking activations)
+      * @param cause the activation id that is responsible for this invoke/activation
+      * @param transid a transaction id for logging
+      * @return a promise that completes with one of the following successful cases:
+      *            Right(WhiskActivation) if waiting for a response and response is ready within allowed duration,
+      *            Left(ActivationId) if not waiting for a response, or allowed duration has elapsed without a result ready
+      *         or these custom failures:
+      *            RequestEntityTooLarge if the message is too large to to post to the message bus
+      */
     protected[actions] def invokeSingleAction(
-        user: Identity,
-        action: ExecutableWhiskAction,
-        payload: Option[JsObject],
-        waitForResponse: Option[FiniteDuration],
-        cause: Option[ActivationId])(
-            implicit transid: TransactionId): Future[Either[ActivationId, WhiskActivation]] = {
+                                               user: Identity,
+                                               action: ExecutableWhiskAction,
+                                               payload: Option[JsObject],
+                                               waitForResponse: Option[FiniteDuration],
+                                               cause: Option[ActivationId])(
+                                               implicit transid: TransactionId): Future[Either[ActivationId, WhiskActivation]] = {
 
         // merge package parameters with action (action parameters supersede), then merge in payload
         val args = action.parameters merge payload
@@ -116,39 +115,64 @@ protected[actions] trait PrimitiveActions {
         val startLoadbalancer = transid.started(this, LoggingMarkers.CONTROLLER_LOADBALANCER, s"action activation id: ${message.activationId}")
         val postedFuture = loadBalancer.publish(action, message)
 
-        postedFuture.flatMap { activeAckResponse =>
-            // successfully posted activation request to the message bus
-            transid.finished(this, startLoadbalancer)
+        postedFuture.flatMap { activeAckResponses =>
 
-            // is caller waiting for the result of the activation?
+            transid.finished(this, startLoadbalancer)
             waitForResponse.map { timeout =>
-                // yes, then wait for the activation response from the message bus
-                // (known as the active response or active ack)
-                waitForActivationResponse(user, message.activationId, timeout, activeAckResponse)
-                    .andThen { case _ => transid.finished(this, startActivation) }
+                var activationResponses = Seq[Future[Either[ActivationId, WhiskActivation]]]()
+
+                activeAckResponses.foreach { activeAckResponse =>
+
+                    activationResponses = activationResponses :+ waitForActivationResponse(user, message.activationId, timeout, activeAckResponse)
+                      .andThen { case _ => transid.finished(this, startActivation) }
+                }
+
+                logging.error(this, s"ACTIVATION RESPONSES: ${activationResponses.size}")
+
+                //TODO: Check if this doesn't block waiting for every response
+                Future.firstCompletedOf(activationResponses)
+
             }.getOrElse {
                 // no, return the activation id
                 transid.finished(this, startActivation)
-                Future.successful(Left(message.activationId))
+                Future.successful(Left(message.activationId)) // Only has to return an activation id since they are all equal
             }
+
         }
+
+        /*    postedFuture.flatMap { activeAckResponse =>
+                // successfully posted activation request to the message bus
+                transid.finished(this, startLoadbalancer)
+
+                // is caller waiting for the result of the activation?
+                waitForResponse.map { timeout =>
+                    // yes, then wait for the activation response from the message bus
+                    // (known as the active response or active ack)
+                    waitForActivationResponse(user, message.activationId, timeout, activeAckResponse.head)
+                      .andThen { case _ => transid.finished(this, startActivation) }
+                }.getOrElse {
+                    // no, return the activation id
+                    transid.finished(this, startActivation)
+                    Future.successful(Left(message.activationId))
+                }
+            }*/
     }
 
     /**
-     * Waits for a response from the message bus (e.g., Kafka) containing the result of the activation. This is the fast path
-     * used for blocking calls where only the result of the activation is needed. This path is called active acknowledgement
-     * or active ack.
-     *
-     * While waiting for the active ack, periodically poll the datastore in case there is a failure in the fast path delivery
-     * which could happen if the connection from an invoker to the message bus is disrupted, or if the publishing of the response
-     * fails because the message is too large.
-     */
+      * Waits for a response from the message bus (e.g., Kafka) containing the result of the activation. This is the fast path
+      * used for blocking calls where only the result of the activation is needed. This path is called active acknowledgement
+      * or active ack.
+      *
+      * While waiting for the active ack, periodically poll the datastore in case there is a failure in the fast path delivery
+      * which could happen if the connection from an invoker to the message bus is disrupted, or if the publishing of the response
+      * fails because the message is too large.
+      */
     private def waitForActivationResponse(
-        user: Identity,
-        activationId: ActivationId,
-        totalWaitTime: FiniteDuration,
-        activeAckResponse: Future[Either[ActivationId, WhiskActivation]])(
-            implicit transid: TransactionId): Future[Either[ActivationId, WhiskActivation]] = {
+                                           user: Identity,
+                                           activationId: ActivationId,
+                                           totalWaitTime: FiniteDuration,
+                                           activeAckResponse: Future[Either[ActivationId, WhiskActivation]])(
+                                           implicit transid: TransactionId): Future[Either[ActivationId, WhiskActivation]] = {
         // this is the promise which active ack or db polling will try to complete via:
         // 1. active ack response, or
         // 2. failing active ack (due to active ack timeout), fall over to db polling
@@ -195,34 +219,34 @@ protected[actions] object ActivationFinisher {
     private val datastorePollPeriodForActivation = 15.seconds
 
     /**
-     * In case of a partial active ack where it is know an activation completed
-     * but the result could not be sent over the bus, use this periodicity to poll
-     * for a result.
-     */
+      * In case of a partial active ack where it is know an activation completed
+      * but the result could not be sent over the bus, use this periodicity to poll
+      * for a result.
+      */
     private val datastorePreemptivePolling = Seq(1.second, 3.seconds, 5.seconds, 7.seconds)
 
     def props(activationLookup: ActivationLookup)(
-        implicit transid: TransactionId,
-        actorSystem: ActorSystem,
-        executionContext: ExecutionContext,
-        logging: Logging): (Future[Either[ActivationId, WhiskActivation]], ActorRef) = {
+      implicit transid: TransactionId,
+      actorSystem: ActorSystem,
+      executionContext: ExecutionContext,
+      logging: Logging): (Future[Either[ActivationId, WhiskActivation]], ActorRef) = {
 
         val (p, _, f) = props(activationLookup, datastorePollPeriodForActivation, datastorePreemptivePolling)
         (p.future, f) // hides the polling actor
     }
 
     /**
-     * Creates the finishing actor.
-     * This is factored for testing.
-     */
+      * Creates the finishing actor.
+      * This is factored for testing.
+      */
     protected[actions] def props(
-        activationLookup: ActivationLookup,
-        slowPoll: FiniteDuration,
-        fastPolls: Seq[FiniteDuration])(
-            implicit transid: TransactionId,
-            actorSystem: ActorSystem,
-            executionContext: ExecutionContext,
-            logging: Logging): (Promise[Either[ActivationId, WhiskActivation]], ActorRef, ActorRef) = {
+                                  activationLookup: ActivationLookup,
+                                  slowPoll: FiniteDuration,
+                                  fastPolls: Seq[FiniteDuration])(
+                                  implicit transid: TransactionId,
+                                  actorSystem: ActorSystem,
+                                  executionContext: ExecutionContext,
+                                  logging: Logging): (Promise[Either[ActivationId, WhiskActivation]], ActorRef, ActorRef) = {
 
         // this is strictly completed by the finishing actor
         val promise = Promise[Either[ActivationId, WhiskActivation]]
@@ -233,21 +257,21 @@ protected[actions] object ActivationFinisher {
     }
 
     /**
-     * An actor to complete a blocking activation request. It encapsulates a promise
-     * to be completed when the result is ready. This may happen in one of two ways.
-     * An active ack message is relayed to this actor to complete the promise when
-     * the active ack is received. Or in case of a partial/missing active ack, an
-     * explicitly scheduled datastore poll of the activation record, if found, will
-     * complete the transaction. When the promise is fulfilled, the actor self destructs.
-     */
+      * An actor to complete a blocking activation request. It encapsulates a promise
+      * to be completed when the result is ready. This may happen in one of two ways.
+      * An active ack message is relayed to this actor to complete the promise when
+      * the active ack is received. Or in case of a partial/missing active ack, an
+      * explicitly scheduled datastore poll of the activation record, if found, will
+      * complete the transaction. When the promise is fulfilled, the actor self destructs.
+      */
     private class ActivationFinisher(
-        poller: ActorRef, // the activation poller
-        fastPollPeriods: Seq[FiniteDuration],
-        promise: Promise[Either[ActivationId, WhiskActivation]])(
-            implicit transid: TransactionId,
-            actorSystem: ActorSystem,
-            executionContext: ExecutionContext,
-            logging: Logging) extends Actor {
+                                      poller: ActorRef, // the activation poller
+                                      fastPollPeriods: Seq[FiniteDuration],
+                                      promise: Promise[Either[ActivationId, WhiskActivation]])(
+                                      implicit transid: TransactionId,
+                                      actorSystem: ActorSystem,
+                                      executionContext: ExecutionContext,
+                                      logging: Logging) extends Actor {
 
         // when the future completes, self-destruct
         promise.future.andThen { case _ => shutdown() }
@@ -281,32 +305,32 @@ protected[actions] object ActivationFinisher {
     }
 
     /**
-     * This creates the inner datastore poller for the completed activation.
-     * It is a factory method to facilitate testing.
-     */
+      * This creates the inner datastore poller for the completed activation.
+      * It is a factory method to facilitate testing.
+      */
     private def poller(
-        slowPollPeriod: FiniteDuration,
-        promise: Promise[Either[ActivationId, WhiskActivation]],
-        activationLookup: ActivationLookup)(
-            implicit transid: TransactionId,
-            actorSystem: ActorSystem,
-            executionContext: ExecutionContext,
-            logging: Logging): ActorRef = {
+                        slowPollPeriod: FiniteDuration,
+                        promise: Promise[Either[ActivationId, WhiskActivation]],
+                        activationLookup: ActivationLookup)(
+                        implicit transid: TransactionId,
+                        actorSystem: ActorSystem,
+                        executionContext: ExecutionContext,
+                        logging: Logging): ActorRef = {
         Scheduler.scheduleWaitAtMost(
             slowPollPeriod,
             initialDelay = slowPollPeriod,
             name = "dbpoll")(() => {
-                if (!promise.isCompleted) {
-                    activationLookup() map {
-                        // complete the future, which in turn will poison pill this scheduler
-                        activation => promise.trySuccess(Right(activation.withoutLogs)) // logs excluded on blocking calls
-                    } andThen {
-                        case Failure(e: NoDocumentException) => // do nothing, scheduler will reschedule another poll
-                        case Failure(t: Throwable) => // something went wrong, abort
-                            logging.error(this, s"failed while waiting on result: ${t.getMessage}")
-                            promise.tryFailure(t) // complete the future, which in turn will poison pill this scheduler
-                    }
-                } else Future.successful({}) // the scheduler will be halted because the promise is now resolved
-            })
+            if (!promise.isCompleted) {
+                activationLookup() map {
+                    // complete the future, which in turn will poison pill this scheduler
+                    activation => promise.trySuccess(Right(activation.withoutLogs)) // logs excluded on blocking calls
+                } andThen {
+                    case Failure(e: NoDocumentException) => // do nothing, scheduler will reschedule another poll
+                    case Failure(t: Throwable) => // something went wrong, abort
+                        logging.error(this, s"failed while waiting on result: ${t.getMessage}")
+                        promise.tryFailure(t) // complete the future, which in turn will poison pill this scheduler
+                }
+            } else Future.successful({}) // the scheduler will be halted because the promise is now resolved
+        })
     }
 }
