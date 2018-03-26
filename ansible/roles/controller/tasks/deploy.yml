@@ -50,7 +50,7 @@
         -e JAVA_OPTS='-Xmx{{ dataflask.heap }}'
         -e DATAFLASK_OPTS='{{ dataflask.arguments }}'
         -e LOCAL_IP='{{ inventory_hostname }}'
-        -e LOCAL_ID='999'
+        -e LOCAL_ID='99999'
         -e FLASKS_PORT='{{ dataflask.port }}'
         -e CONFIG_PATH='/'
         -e ALL_NODES='{{ groups['dataflasks']|join(" ") }}'
@@ -126,7 +126,7 @@
       "CONFIG_PATH": "/"
       "DATAFLASK_IP": "{{ inventory_hostname }}"
       "DATAFLASK_PORT": "{{ dataflask.port }}"
-      "DATAFLASK_ID": 999
+      "DATAFLASK_ID": 99999
 
       "WHISK_VERSION_NAME": "{{ whisk_version_name }}"
       "WHISK_VERSION_DATE": "{{ whisk.version.date }}"

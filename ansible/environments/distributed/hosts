@@ -5,24 +5,34 @@
 ; used for local actions only
 ansible ansible_connection=local
 [registry]
-192.168.116.200
+; 192.168.116.200
+192.168.122.205 ansible_sudo_pass=paulo12345
 [edge]
-192.168.116.200
+; 192.168.116.200
+192.168.122.205 ansible_sudo_pass=paulo12345
 [apigateway:children]
 edge
 [redis:children]
 edge
 [controllers]
-192.168.116.200
+; 192.168.116.200
+192.168.122.205 ansible_sudo_pass=paulo12345
 [kafka]
-192.168.116.200
+; 192.168.116.200
+192.168.122.205 ansible_sudo_pass=paulo12345
 [consul_servers]
-192.168.116.200
+; 192.168.116.200
+192.168.122.205 ansible_sudo_pass=paulo12345
 [invokers]
-192.168.116.176
-192.168.116.162
-192.168.116.161
+; 127.0.0.1 ansible_user=paulo ansible_port=2222 ansible_sudo_pass=paulo12345
+192.168.122.202 ansible_sudo_pass=paulo12345
+; 192.168.122.203 ansible_sudo_pass=paulo12345
+; 192.168.122.204  ansible_sudo_pass=paulo12345
+; 192.168.116.176
+; 192.168.116.162
+; 192.168.116.161
 [dataflasks:children]
 invokers
 [db]
-192.168.116.200
+192.168.122.205 ansible_sudo_pass=paulo12345
+;192.168.116.200
