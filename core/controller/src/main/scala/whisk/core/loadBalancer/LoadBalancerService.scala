@@ -72,7 +72,7 @@ trait LoadBalancer {
     *         The future is guaranteed to complete within the declared action time limit
     *         plus a grace period (see activeAckTimeoutGrace).
     */
-  def publish(action: ExecutableWhiskAction, msg: ActivationMessage)(implicit transid: TransactionId): Future[Future[Either[ActivationId, WhiskActivation]]]
+  def publish(action: ExecutableWhiskAction, msg: ActivationMessage)(implicit transid: TransactionId): Future[Seq[Future[Either[ActivationId, WhiskActivation]]]]
 }
 
 class LoadBalancerService(
@@ -86,30 +86,28 @@ class LoadBalancerService(
   /** The execution context for futures */
   implicit val executionContext: ExecutionContext = actorSystem.dispatcher
 
-  /** How many invokers are dedicated to blackbox images.  We range bound to something sensical regardless of configuration. */
-  private val blackboxFraction: Double = Math.max(0.0, Math.min(1.0, config.controllerBlackboxFraction))
-  logging.info(this, s"blackboxFraction = $blackboxFraction")
-
   private val loadBalancerData = new LoadBalancerData()
 
   override def activeActivationsFor(namespace: UUID) = loadBalancerData.activationCountOn(namespace)
 
   override def totalActiveActivations = loadBalancerData.totalActivationCount
 
-  //TODO: Mais tarde, os metadados para escolher invoker vão estar incluidos na ActivationMessage
   override def publish(action: ExecutableWhiskAction, msg: ActivationMessage)(
-    implicit transid: TransactionId): Future[Future[Either[ActivationId, WhiskActivation]]] = {
+    implicit transid: TransactionId): Future[Seq[Future[Either[ActivationId, WhiskActivation]]]] = {
 
     val actionDataTag: String = action.annotations.get("tag").getOrElse("").toString
     val actionMinExpectedMem: Double = action.annotations.get("min_mem").getOrElse("0").toString.toDouble
     val actionEnv: ComputingEnv.EnvVal = ComputingEnv.getFromString(action.annotations.get("env").getOrElse("ANY").toString)
+    val reliabilityFactor: Int = action.annotations.get("nodes").getOrElse("2").toString.toInt
 
     logging.info(this, s"RECEIVED PUBLISH REQUEST WITH PARAMS tag: ${actionDataTag} mem: ${actionMinExpectedMem} env: ${actionEnv.toString}")
 
-    chooseInvoker(msg.user, action, transid, actionDataTag, actionMinExpectedMem, actionEnv).flatMap { invokerName =>
-      val entry = setupActivation(action, msg.activationId, msg.user.uuid, invokerName, transid)
-      sendActivationToInvoker(messageProducer, msg, invokerName).map { _ =>
-        entry.promise.future
+    chooseInvoker(msg.user, action, transid, actionDataTag, actionMinExpectedMem, actionEnv, reliabilityFactor).map { invokerNames =>
+      invokerNames.map { invokerName =>
+        val entry = setupActivation(action, msg.activationId, msg.user.uuid, invokerName, transid)
+        sendActivationToInvoker(messageProducer, msg, invokerName).flatMap { _ =>
+          entry.promise.future
+        }
       }
     }
   }
@@ -118,8 +116,9 @@ class LoadBalancerService(
   def allInvokers(transid: TransactionId,
                   actionDataTag: String,
                   actionMinExpectedMem: Double,
-                  actionEnv: ComputingEnv.EnvVal): Future[IndexedSeq[InstanceId]] = dataflaskPool
-    .ask(GetInvokers(2, transid.id, actionDataTag, actionMinExpectedMem, actionEnv))(Timeout(15.seconds))
+                  actionEnv: ComputingEnv.EnvVal,
+                  reliabilityFactor: Int): Future[IndexedSeq[InstanceId]] = dataflaskPool
+    .ask(GetInvokers(reliabilityFactor, transid.id, actionDataTag, actionMinExpectedMem, actionEnv))(Timeout(15.seconds))
     .mapTo[IndexedSeq[InstanceId]]
 
   /**
@@ -131,12 +130,13 @@ class LoadBalancerService(
   private def processCompletion(response: Either[ActivationId, WhiskActivation], tid: TransactionId, forced: Boolean): Unit = {
     val aid = response.fold(l => l, r => r.activationId)
     loadBalancerData.removeActivation(aid) match {
-      case Some(entry) =>
+      case Some(entryList) =>
         logging.info(this, s"${if (!forced) "received" else "forced"} active ack for '$aid'")(tid)
+
         if (!forced) {
-          entry.promise.trySuccess(response)
+          entryList.foreach { _.promise.trySuccess(response) }  // Complete every remaining activation entry with response
         } else {
-          entry.promise.tryFailure(new Throwable("no active ack received"))
+          entryList.foreach { _.promise.tryFailure(new Throwable("no active ack received"))}
         }
       case None =>
         // the entry was already removed
@@ -179,6 +179,7 @@ class LoadBalancerService(
   }
 
   private val dataflaskPool = {
+    //TODO: Tentar remover isto e criar apenas o ator DataFlaskPool. Penso que o message consumer é irrelevante
     val maxPingsPerPoll = 128
     val pingConsumer = messasgingProvider.getConsumer(config, s"health${instance.toInt}", "health", maxPeek = maxPingsPerPoll)
 
@@ -189,7 +190,6 @@ class LoadBalancerService(
     * Subscribes to active acks (completion messages from the invokers), and
     * registers a handler for received active acks from invokers.
     */
-  //TODO: No futuro, informação sobre os invokers podem ser geridas aqui e no método processActiveAck
   val maxActiveAcksPerPoll = 128
   val activeAckPollDuration = 1.second
   private val activeAckConsumer = messasgingProvider.getConsumer(config, "completions", s"completed${instance.toInt}", maxPeek = maxActiveAcksPerPoll)
@@ -206,7 +206,6 @@ class LoadBalancerService(
         // treat left as success (as it is the result a the message exceeding the bus limit)
         val isSuccess = m.response.fold(l => true, r => !r.response.isWhiskError)
         activationFeed ! MessageFeed.Processed
-        dataflaskPool ! InvocationFinishedMessage(m.invoker, isSuccess)
 
       case Failure(t) =>
         activationFeed ! MessageFeed.Processed
@@ -214,49 +213,33 @@ class LoadBalancerService(
     }
   }
 
-  /** Compute the number of blackbox-dedicated invokers by applying a rounded down fraction of all invokers (but at least 1). */
-  private def numBlackbox(totalInvokers: Int) = Math.max(1, (totalInvokers.toDouble * blackboxFraction).toInt)
-
-  /** Return invokers (almost) dedicated to running blackbox actions. */
-  private def blackboxInvokers(invokers: IndexedSeq[InstanceId]): IndexedSeq[InstanceId] = {
-    val blackboxes = numBlackbox(invokers.size)
-    invokers.takeRight(blackboxes)
-  }
-
-  /**
-    * Return (at least one) invokers for running non black-box actions.
-    * This set can overlap with the blackbox set if there is only one invoker.
-    */
-  private def managedInvokers(invokers: IndexedSeq[InstanceId]): IndexedSeq[InstanceId] = {
-    val managed = Math.max(1, invokers.length - numBlackbox(invokers.length))
-    invokers.take(managed)
-  }
-
   /** Determine which invoker this activation should go to. Due to dynamic conditions, it may return no invoker. */
   private def chooseInvoker(user: Identity, action: ExecutableWhiskAction, transid: TransactionId,
-                            actionDataTag: String, actionMinExpectedMem: Double, actionEnv: ComputingEnv.EnvVal): Future[InstanceId] = {
+                            actionDataTag: String, actionMinExpectedMem: Double, actionEnv: ComputingEnv.EnvVal, reliabilityFactor: Int): Future[Seq[InstanceId]] = {
     val hash = generateHash(user.namespace, action)
 
-    allInvokers(transid, actionDataTag, actionMinExpectedMem, actionEnv).flatMap { invokers =>
-      val invokersToUse = if (action.exec.pull) blackboxInvokers(invokers) else managedInvokers(invokers)
-      val invokersWithUsage = invokersToUse.view.map {
+    allInvokers(transid, actionDataTag, actionMinExpectedMem, actionEnv, reliabilityFactor).flatMap { invokers =>
+      val invokersWithUsage = invokers.view.map {
         // Using a view defers the comparably expensive lookup to actual access of the element
         case instance =>
           logging.info(this, s"Found invoker with instance id ${instance.toInt}")
           (instance, loadBalancerData.activationCountOn(instance))
       }
 
-     LoadBalancerService.schedule(invokersWithUsage, hash) match {
-       case Some(invoker) => Future.successful(invoker)
-       case None =>
-         logging.error(this, s"all invokers down")
-         Future.failed(new LoadBalancerException("no invokers available"))
+      if (reliabilityFactor > invokersWithUsage.size)
+        logging.info(this, s"FAILED TO FIND ENOUGH INVOKERS. FOUND ${invokersWithUsage.size} BUT REQUIRED $reliabilityFactor. COMPUTING...")
+
+      LoadBalancerService.schedule(invokersWithUsage, hash) match {
+        case Some(invokers) => Future.successful(invokers)
+        case None =>
+          logging.error(this, s"all invokers down")
+          Future.failed(new LoadBalancerException("no invokers available"))
       }
     }
   }
 
   /** Generates a hash based on the string representation of namespace and action */
-  //TODO: Modificar isto para o nosso algoritmo?
+  //TODO: Not used. However, can be usefull to create the hash for dataflask
   private def generateHash(namespace: EntityName, action: ExecutableWhiskAction): Int = {
     (namespace.asString.hashCode() ^ action.fullyQualifiedName(false).asString.hashCode()).abs
   }
@@ -291,9 +274,13 @@ object LoadBalancerService {
     * @param hash stable identifier of the entity to be scheduled
     * @return an invoker to schedule to or None of no invoker is available
     */
-  //TODO: No futuro, aqui vão ser definidas as regras de filtragem do algoritmo, como p.e. o número de invokers que devem executar a action
-  def schedule(invokers: Seq[(InstanceId, Int)], hash: Int): Option[InstanceId] = {
-    Some(invokers.head._1) //invokers.Int é o número de invocations atualmente no invoker
+  //TODO: Aqui podem ser definidas algumas regras de filtragem do algoritmo
+  def schedule(invokers: Seq[(InstanceId, Int)], hash: Int): Option[Seq[InstanceId]] = {
+    if(invokers.size > 0) {
+      Some(invokers.map(entry => entry._1)) //invokers.Int é o número de invocations atualmente no invoker
+    } else {
+      None
+    }
   }
 }
 

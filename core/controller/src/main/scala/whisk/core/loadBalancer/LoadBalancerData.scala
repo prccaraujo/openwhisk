@@ -21,9 +21,11 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.Promise
-
-import whisk.core.entity.{ ActivationId, UUID, WhiskActivation }
+import whisk.core.entity.{ActivationId, UUID, WhiskActivation}
 import whisk.core.entity.InstanceId
+
+import scala.reflect.runtime.universe._
+import scala.collection.mutable
 
 /** Encapsulates data relevant for a single activation */
 case class ActivationEntry(id: ActivationId, namespaceId: UUID, invokerName: InstanceId, promise: Promise[Either[ActivationId, WhiskActivation]])
@@ -38,7 +40,7 @@ class LoadBalancerData() {
 
     private val activationByInvoker = TrieMap[InstanceId, AtomicInteger]()
     private val activationByNamespaceId = TrieMap[UUID, AtomicInteger]()
-    private val activationsById = TrieMap[ActivationId, ActivationEntry]()
+    private val activationsById = TrieMap[ActivationId, mutable.Seq[ActivationEntry]]()
     private val totalActivations = new AtomicInteger(0)
 
     /** Get the number of activations across all namespaces. */
@@ -71,7 +73,12 @@ class LoadBalancerData() {
      * @return the respective activation or None if it doesn't exist
      */
     def activationById(activationId: ActivationId): Option[ActivationEntry] = {
-        activationsById.get(activationId)
+        activationsById.get(activationId).get.headOption //TODO: Bad temporary patch
+    }
+
+    def matchListToAdd[A: TypeTag](list: mutable.Seq[A], entry: ActivationEntry) = list match {
+        case activationEntryList: mutable.Seq[ActivationEntry @unchecked] if typeOf[A] =:= typeOf[ActivationEntry] =>
+            activationEntryList :+ entry
     }
 
     /**
@@ -85,15 +92,57 @@ class LoadBalancerData() {
      *         exist before the entry from the state
      */
     def putActivation(id: ActivationId, update: => ActivationEntry): ActivationEntry = {
-        activationsById.getOrElseUpdate(id, {
-            val entry = update
-            totalActivations.incrementAndGet()
-            activationByNamespaceId.getOrElseUpdate(entry.namespaceId, new AtomicInteger(0)).incrementAndGet()
-            activationByInvoker.getOrElseUpdate(entry.invokerName, new AtomicInteger(0)).incrementAndGet()
-            entry
-        })
+        //Activations of the same action only count as one
+        val entry = update
+        activationsById.get(id) match {
+            case Some(entryList) => //If there is already an activation id
+                matchListToAdd(entryList, entry) //Add another activationEntry to the entryList
+
+            case None => //There's no activation id yet
+                totalActivations.incrementAndGet()
+                activationByNamespaceId.getOrElseUpdate(entry.namespaceId, new AtomicInteger(0)).incrementAndGet()
+        }
+
+        activationByInvoker.getOrElseUpdate(entry.invokerName, new AtomicInteger(0)).incrementAndGet()
+        entry
     }
 
+/*    def removeActivation(entry: ActivationEntry): Option[ActivationEntry] = {
+        //Se tiver uma activation entry ainda, faz remove
+        //Se não, atualiza apenas a entry
+        var res : Option[ActivationEntry] = Option(entry)
+        if (activationsById.contains(entry.id)) {
+            if (activationsById.get(entry.id).get.size > 1) {
+                val entryList = activationsById.get(entry.id)
+                val newList = entryList.filter { !_.equals(entry) }.get
+                activationsById.update(entry.id, newList)
+                if(entryList.size == newList.size - 1)
+                    res = Option(entry)
+                else
+                    res = None
+            } else {
+                activationsById.remove(entry.id).map { x =>
+                  totalActivations.decrementAndGet()
+                  activationByNamespaceId.getOrElseUpdate(entry.namespaceId, new AtomicInteger(0)).decrementAndGet()
+                  activationByInvoker.getOrElseUpdate(entry.invokerName, new AtomicInteger(0)).decrementAndGet()
+                  res = x.headOption
+                }
+            }
+        }
+        res
+    }
+*/
+    def removeActivation(entry: ActivationEntry): Unit = {
+        activationsById.remove(entry.id).foreach { x =>
+            totalActivations.decrementAndGet()
+            activationByNamespaceId.getOrElseUpdate(entry.namespaceId, new AtomicInteger(0)).decrementAndGet()
+            x.foreach { activation =>
+                activationByInvoker.getOrElseUpdate(activation.invokerName, new AtomicInteger(0)).decrementAndGet()
+            }
+        }
+    }
+
+    /*
     /**
      * Removes the given entry.
      *
@@ -108,6 +157,11 @@ class LoadBalancerData() {
             x
         }
     }
+*/
+    def matchListToRemove[A: TypeTag](list: mutable.Seq[A]) = list match {
+        case activationEntryList: mutable.Seq[ActivationEntry @unchecked] if typeOf[A] =:= typeOf[ActivationEntry] =>
+            removeActivation(activationEntryList.head.asInstanceOf[ActivationEntry])
+    }
 
     /**
      * Removes the activation identified by the given activation id.
@@ -115,7 +169,14 @@ class LoadBalancerData() {
      * @param aid activation id to remove
      * @return The deleted entry or None if nothing got deleted
      */
-    def removeActivation(aid: ActivationId): Option[ActivationEntry] = {
-        activationsById.get(aid).flatMap(removeActivation)
+    def removeActivation(aid: ActivationId): Option[Seq[ActivationEntry]] = {
+        val list = activationsById.get(aid)
+        list match {
+            case Some(matchedList) =>
+                matchListToRemove(matchedList)
+                list
+            case None =>
+                None
+        }
     }
 }

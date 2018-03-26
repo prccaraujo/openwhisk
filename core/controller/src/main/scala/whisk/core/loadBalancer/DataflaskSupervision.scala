@@ -22,7 +22,6 @@ case class GetInvokers(numberOfInvokers: Int,
                        actionEnv: ComputingEnv.EnvVal)
 
 case class ActivationRequest(msg: ActivationMessage, invoker: InstanceId)
-case class InvocationFinishedMessage(invokerInstance: InstanceId, successful: Boolean)
 
 //Comunicates with local DataFlask container and asks for information about available invokers
 class DataFlaskPool(pingConsumer: MessageConsumer) extends Actor {
@@ -43,8 +42,6 @@ class DataFlaskPool(pingConsumer: MessageConsumer) extends Actor {
   //Resolve local dataflasks actor reference
   resolveDataFlaskActorRef(dataFlasksBaseSystemAddress, localDataFlaskPeer)
 
-  val instanceToRef = mutable.Map[InstanceId, ActorRef]() //TODO: REMOVE?
-  val refToInstance = mutable.Map[ActorRef, InstanceId]() //TODO: REMOVE?
   val operationToController = mutable.Map[Long, ActorRef]() //Maps requested operation ID to the ref of the controller that did it
 
   //TODO: At this moment this is implemented as if every operation responds in order to the load balancer (can bring problems, f.e. by returning invokers to the wrong request)
@@ -75,12 +72,6 @@ class DataFlaskPool(pingConsumer: MessageConsumer) extends Actor {
         controller ! msg.peerList.map(peer => InstanceId(peer.name.toInt)).toIndexedSeq
         operationToController.remove(msg.operationId)
       }
-
-    //TODO: Adaptar para dataflasks
-    case msg: InvocationFinishedMessage => {
-      // Forward message to invoker, if InvokerActor exists
-      instanceToRef.get(msg.invokerInstance).map(_.forward(msg))
-    }
   }
 
   def resolveDataFlaskActorRef(baseSystemAddress: String, peer: DFPeer): Unit = {
